@@ -1,0 +1,3256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="appTitle">Claude JSONL 项目历史解析器 - 重构版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f9fafb;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+    </style>
+</head>
+
+<body>
+    <claude-history-app></claude-history-app>
+
+    <script>
+        // Main application component
+        class ClaudeCodeHistoryApp extends HTMLElement {
+            constructor() {
+                super();
+                this.dataManager = window.dataManager;
+                this.styleManager = window.styleManager || new StyleManager();
+                this.languageManager = window.languageManager;
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+                this.attachEventListeners();
+                this.loadInitialState();
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+            <style>
+                ${this.styleManager.generateTailwindStyles()}
+                ${this.styleManager.getAppStyles()}
+            </style>
+            <div class="claude-app-container flex flex-col lg:flex-row gap-6">
+                <!-- Left Panel -->
+                <div class="claude-left-panel lg:w-2/5 flex flex-col gap-4">
+                    <div class="bg-white rounded-xl shadow-md p-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <h2 class="text-lg font-semibold text-gray-800 flex items-center">
+                                <span class="text-blue-500 mr-2">📁</span>
+                                <span id="projectFolderTitle">${this.languageManager.get('projectFolder')}</span>
+                            </h2>
+                            <button id="languageToggle" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0 flex items-center">
+                                <span class="mr-1">🌐</span>
+                                <span id="languageToggleText">${this.languageManager.getCurrentLanguage() === 'zh-CN' ? '中文' : 'English'}</span>
+                            </button>
+                        </div>
+                        <div class="flex mb-3">
+                            <input type="text" id="folderPath" placeholder="${this.languageManager.get('selectFolderPlaceholder')}" readonly
+                                class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-l-lg bg-gray-50">
+                            <button id="browseBtn"
+                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-r-lg transition-colors text-sm border-0">
+                                <span class="mr-1">📁</span>
+                                <span id="browseBtnText">${this.languageManager.get('selectButton')}</span>
+                            </button>
+                        </div>
+
+                        <!-- Option buttons -->
+                        <div class="flex space-x-2">
+                            <button id="refreshBtn"
+                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                <span class="mr-1">🔄</span>
+                                <span id="refreshBtnText">${this.languageManager.get('refreshButton')}</span>
+                            </button>
+                            <button id="expandAllBtn"
+                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                <span class="mr-1">⬇️</span>
+                                <span id="expandAllBtnText">${this.languageManager.get('expandAllButton')}</span>
+                            </button>
+                            <button id="collapseAllBtn"
+                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                <span class="mr-1">⬆️</span>
+                                <span id="collapseAllBtnText">${this.languageManager.get('collapseAllButton')}</span>
+                            </button>
+                            <button id="resetBtn"
+                                class="flex-1 bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                <span class="mr-1">↩️</span>
+                                <span id="resetBtnText">${this.languageManager.get('resetButton')}</span>
+                            </button>
+                        </div>
+
+                        <div class="mt-2 text-xs text-gray-500">
+                            <p><span class="mr-1">ℹ️</span>${this.languageManager.get('browserSupportInfo')}</p>
+                        </div>
+                    </div>
+
+                    <!-- File Browser Component -->
+                    <file-browser></file-browser>
+                </div>
+
+                <!-- Right Panel -->
+                <div class="claude-right-panel lg:w-3/5">
+                    <!-- Message Viewer Component -->
+                    <message-viewer></message-viewer>
+
+                    <!-- Session Navigator Component -->
+                    <session-navigator></session-navigator>
+                </div>
+            </div>
+        `;
+            }
+
+            attachEventListeners() {
+                const browseBtn = this.shadowRoot.getElementById('browseBtn');
+                const refreshBtn = this.shadowRoot.getElementById('refreshBtn');
+                const expandBtn = this.shadowRoot.getElementById('expandAllBtn');
+                const collapseBtn = this.shadowRoot.getElementById('collapseAllBtn');
+                const resetBtn = this.shadowRoot.getElementById('resetBtn');
+                const languageToggle = this.shadowRoot.getElementById('languageToggle');
+
+                browseBtn.addEventListener('click', () => this.handleBrowse());
+                refreshBtn.addEventListener('click', () => this.handleRefresh());
+                expandBtn.addEventListener('click', () => this.handleExpandAll());
+                collapseBtn.addEventListener('click', () => this.handleCollapseAll());
+                resetBtn.addEventListener('click', () => this.handleReset());
+                languageToggle.addEventListener('click', () => this.handleLanguageToggle());
+
+                // Listen for language change events
+                document.addEventListener('languageChanged', () => {
+                    this.updateUI();
+                });
+
+                // Check browser support
+                if (!('showDirectoryPicker' in window)) {
+                    this.showBrowserNotSupported();
+                }
+            }
+
+            async loadInitialState() {
+                try {
+                    const lastDirectoryData = await this.dataManager.getLastDirectoryHandle();
+                    if (lastDirectoryData && lastDirectoryData.handle) {
+                        await this.dataManager.setDirectoryHandle(lastDirectoryData.handle);
+                        this.shadowRoot.getElementById('folderPath').value = lastDirectoryData.handle.name;
+
+                        const permissionStatus = await lastDirectoryData.handle.queryPermission({ mode: 'read' });
+                        if (permissionStatus === 'granted') {
+                            await this.loadProject();
+                        } else {
+                            this.showInitialState();
+                        }
+                    } else {
+                        this.showInitialState();
+                    }
+                } catch (error) {
+                    console.log('加载初始状态失败:', error);
+                    this.showInitialState();
+                }
+            }
+
+            async handleBrowse() {
+                try {
+                    const browseBtn = this.shadowRoot.getElementById('browseBtn');
+                    browseBtn.innerHTML = `<span class="mr-1">⏳</span>${this.languageManager.get('selectingButton')}`;
+                    browseBtn.disabled = true;
+
+                    const directoryHandle = await window.showDirectoryPicker();
+                    await this.dataManager.setDirectoryHandle(directoryHandle);
+
+                    this.shadowRoot.getElementById('folderPath').value = directoryHandle.name;
+                    await this.loadProject();
+
+                    browseBtn.innerHTML = `<span class="mr-1">📁</span>${this.languageManager.get('selectButton')}`;
+                    browseBtn.disabled = false;
+                } catch (error) {
+                    console.error('选择文件夹时出错:', error);
+                    if (error.name !== 'AbortError') {
+                        alert(`${this.languageManager.get('folderSelectionError')}: ${error.message}`);
+                    }
+
+                    const browseBtn = this.shadowRoot.getElementById('browseBtn');
+                    browseBtn.innerHTML = `<span class="mr-1">📁</span>${this.languageManager.get('selectButton')}`;
+                    browseBtn.disabled = false;
+                }
+            }
+
+            async handleRefresh() {
+                const refreshBtn = this.shadowRoot.getElementById('refreshBtn');
+                const originalText = refreshBtn.innerHTML;
+
+                refreshBtn.innerHTML = `<span class="mr-1">⏳</span>${this.languageManager.get('refreshingButton')}`;
+                refreshBtn.disabled = true;
+
+                try {
+                    const directoryHandle = this.dataManager.getDirectoryHandle();
+                    if (directoryHandle) {
+                        const permissionStatus = await directoryHandle.queryPermission({ mode: 'read' });
+                        if (permissionStatus === 'granted') {
+                            await this.loadProject();
+                        } else {
+                            alert(this.languageManager.get('directoryAccessExpired'));
+                            this.showInitialState();
+                        }
+                    } else {
+                        this.showInitialState();
+                    }
+                } catch (error) {
+                    console.error('handleRefresh error:', error);
+                    alert(`${this.languageManager.get('refreshError')}: ${error.message}`);
+                } finally {
+                    refreshBtn.innerHTML = originalText;
+                    refreshBtn.disabled = false;
+                }
+            }
+
+            handleExpandAll() {
+                const fileBrowser = this.shadowRoot.querySelector('file-browser');
+                if (fileBrowser) {
+                    fileBrowser.expandAll();
+                }
+            }
+
+            handleCollapseAll() {
+                const fileBrowser = this.shadowRoot.querySelector('file-browser');
+                if (fileBrowser) {
+                    fileBrowser.collapseAll();
+                }
+            }
+
+            async handleReset() {
+                if (confirm(this.languageManager.get('resetConfirmation'))) {
+                    await this.dataManager.reset();
+                    this.shadowRoot.getElementById('folderPath').value = '';
+                    this.showInitialState();
+                }
+            }
+
+            getMessageViewer() {
+                return this.shadowRoot.querySelector('message-viewer');
+            }
+
+
+            async loadProject() {
+                try {
+                    const directoryHandle = this.dataManager.getDirectoryHandle();
+                    if (!directoryHandle) return;
+
+                    // Show loading state
+                    this.showProjectLoading();
+
+                    // Load project data
+                    await this.dataManager.loadProject();
+
+                    // Update file browser
+                    const fileBrowser = this.shadowRoot.querySelector('file-browser');
+                    if (fileBrowser) {
+                        fileBrowser.updateProject(this.dataManager.getProjectData());
+                    }
+
+                    // Show project overview
+                    this.showProjectOverview();
+
+                } catch (error) {
+                    console.error('loadProject error:', error);
+                    alert(`${this.languageManager.get('loadProjectError')}: ${error.message}`);
+                }
+            }
+
+            showInitialState() {
+                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                if (messageViewer) {
+                    messageViewer.showInitialState();
+                }
+            }
+
+            showProjectLoading() {
+                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                if (messageViewer) {
+                    messageViewer.showLoading();
+                }
+            }
+
+            showProjectOverview() {
+                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                if (messageViewer) {
+                    messageViewer.showProjectOverview(this.dataManager.getProjectData());
+                }
+            }
+
+            handleLanguageToggle() {
+                const currentLang = this.languageManager.getCurrentLanguage();
+                const newLang = currentLang === 'zh-CN' ? 'en' : 'zh-CN';
+                this.languageManager.setLanguage(newLang);
+            }
+
+            updateUI() {
+                // Update page title
+                document.title = this.languageManager.get('appTitle');
+
+                // Update main app UI elements
+                this.shadowRoot.getElementById('projectFolderTitle').textContent = this.languageManager.get('projectFolder');
+                this.shadowRoot.getElementById('folderPath').placeholder = this.languageManager.get('selectFolderPlaceholder');
+                this.shadowRoot.getElementById('browseBtnText').textContent = this.languageManager.get('selectButton');
+                this.shadowRoot.getElementById('refreshBtnText').textContent = this.languageManager.get('refreshButton');
+                this.shadowRoot.getElementById('expandAllBtnText').textContent = this.languageManager.get('expandAllButton');
+                this.shadowRoot.getElementById('collapseAllBtnText').textContent = this.languageManager.get('collapseAllButton');
+                this.shadowRoot.getElementById('resetBtnText').textContent = this.languageManager.get('resetButton');
+
+                // Update browser support info
+                const supportInfo = this.shadowRoot.querySelector('.mt-2 p');
+                if (supportInfo) {
+                    supportInfo.innerHTML = `<span class="mr-1">ℹ️</span>${this.languageManager.get('browserSupportInfo')}`;
+                }
+
+                // Update language toggle button
+                const languageToggle = this.shadowRoot.getElementById('languageToggle');
+                languageToggle.textContent = this.languageManager.getCurrentLanguage() === 'zh-CN' ? '🌐 中文' : '🌐 English';
+
+                // Update other components
+                const fileBrowser = this.shadowRoot.querySelector('file-browser');
+                if (fileBrowser) {
+                    fileBrowser.updateLanguage();
+                }
+
+                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                if (messageViewer) {
+                    messageViewer.updateLanguage();
+                }
+            }
+
+            showBrowserNotSupported() {
+                const browseBtn = this.shadowRoot.getElementById('browseBtn');
+                browseBtn.disabled = true;
+                browseBtn.innerHTML = `<span class="mr-1">⚠️</span>${this.languageManager.get('browserNotSupportedButton')}`;
+                alert(this.languageManager.get('browserNotSupported'));
+            }
+        }
+
+
+
+        // Central style management component
+        class StyleManager {
+            constructor() {
+                this.styles = {
+                    app: this.generateAppStyles(),
+                    fileBrowser: this.generateFileBrowserStyles(),
+                    messageViewer: this.generateMessageViewerStyles(),
+                    sessionNavigator: this.generateSessionNavigatorStyles()
+                };
+            }
+
+            generateTailwindStyles() {
+                return `
+                /* Tailwind CSS styles */
+                * { box-sizing: border-box; }
+
+                /* Layout */
+                .grid { display: grid; }
+                .flex { display: flex; }
+                .flex-col { flex-direction: column; }
+                .flex-row { flex-direction: row; }
+                .flex-1 { flex: 1 1 0%; }
+                .flex-wrap { flex-wrap: wrap; }
+                .items-center { align-items: center; }
+                .items-start { align-items: flex-start; }
+                .justify-center { justify-content: center; }
+                .justify-between { justify-content: space-between; }
+                .justify-end { justify-content: flex-end; }
+
+                /* Spacing */
+                .gap-2 { gap: 0.5rem; }
+                .gap-4 { gap: 1rem; }
+                .gap-6 { gap: 1.5rem; }
+                .space-x-2 > * + * { margin-left: 0.5rem; }
+                .space-y-2 > * + * { margin-top: 0.5rem; }
+                .space-y-3 > * + * { margin-top: 0.75rem; }
+                .space-y-4 > * + * { margin-top: 1rem; }
+
+                /* Sizing */
+                .w-full { width: 100%; }
+                .w-2\/5 { width: 40%; }
+                .w-3\/5 { width: 60%; }
+                .w-4 { width: 1rem; }
+                .w-8 { width: 2rem; }
+                .h-full { height: 100%; }
+                .h-8 { height: 2rem; }
+                .h-32 { height: 8rem; }
+                .h-48 { height: 12rem; }
+                .min-h-screen { min-height: 100vh; }
+                .min-w-max { min-width: max-content; }
+
+                /* Padding */
+                .p-2 { padding: 0.5rem; }
+                .p-3 { padding: 0.75rem; }
+                .p-4 { padding: 1rem; }
+                .p-6 { padding: 1.5rem; }
+                .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+                .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+                .px-4 { padding-left: 1rem; padding-right: 1rem; }
+                .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+                .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+                .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+
+                /* Margin */
+                .m-0 { margin: 0; }
+                .m-4 { margin: 1rem; }
+                .mx-auto { margin-left: auto; margin-right: auto; }
+                .mb-1 { margin-bottom: 0.25rem; }
+                .mb-2 { margin-bottom: 0.5rem; }
+                .mb-3 { margin-bottom: 0.75rem; }
+                .mb-4 { margin-bottom: 1rem; }
+                .mb-6 { margin-bottom: 1.5rem; }
+                .mb-8 { margin-bottom: 2rem; }
+                .mr-1 { margin-right: 0.25rem; }
+                .mr-2 { margin-right: 0.5rem; }
+                .ml-1 { margin-left: 0.25rem; }
+                .ml-2 { margin-left: 0.5rem; }
+                .ml-4 { margin-left: 1rem; }
+                .ml-6 { margin-left: 1.5rem; }
+                .ml-auto { margin-left: auto; }
+                .mt-1 { margin-top: 0.25rem; }
+                .mt-2 { margin-top: 0.5rem; }
+                .mt-4 { margin-top: 1rem; }
+
+                /* Typography */
+                .text-xs { font-size: 0.75rem; line-height: 1rem; }
+                .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+                .text-base { font-size: 1rem; line-height: 1.5rem; }
+                .text-lg { font-size: 1.125rem; line-height: 1.75rem; }
+                .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
+                .text-2xl { font-size: 1.5rem; line-height: 2rem; }
+                .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
+                .text-4xl { font-size: 2.25rem; line-height: 2.5rem; }
+                .text-5xl { font-size: 3rem; line-height: 1; }
+
+                .font-medium { font-weight: 500; }
+                .font-semibold { font-weight: 600; }
+                .font-bold { font-weight: 700; }
+
+                .text-center { text-align: center; }
+                .text-left { text-align: left; }
+                .text-right { text-align: right; }
+
+                /* Colors - Text */
+                .text-white { color: white; }
+                .text-gray-400 { color: #9ca3af; }
+                .text-gray-500 { color: #6b7280; }
+                .text-gray-600 { color: #4b5563; }
+                .text-gray-700 { color: #374151; }
+                .text-gray-800 { color: #1f2937; }
+                .text-gray-900 { color: #111827; }
+                .text-blue-500 { color: #3b82f6; }
+                .text-blue-600 { color: #2563eb; }
+                .text-blue-700 { color: #1d4ed8; }
+                .text-blue-800 { color: #1e40af; }
+                .text-green-500 { color: #10b981; }
+                .text-green-600 { color: #059669; }
+                .text-red-500 { color: #ef4444; }
+                .text-red-600 { color: #dc2626; }
+                .text-yellow-500 { color: #eab308; }
+                .text-yellow-600 { color: #ca8a04; }
+                .text-purple-500 { color: #8b5cf6; }
+                .text-purple-600 { color: #7c3aed; }
+                .text-pink-500 { color: #ec4899; }
+                .text-indigo-500 { color: #6366f1; }
+                .text-orange-500 { color: #f97316; }
+                .text-teal-500 { color: #14b8a6; }
+                .text-cyan-500 { color: #06b6d4; }
+                .text-lime-500 { color: #84cc16; }
+                .text-amber-500 { color: #f59e0b; }
+                .text-emerald-500 { color: #10b981; }
+                .text-violet-500 { color: #8b5cf6; }
+                .text-fuchsia-500 { color: #d946ef; }
+                .text-rose-500 { color: #f43f5e; }
+                .text-sky-500 { color: #0ea5e9; }
+
+                /* Colors - Background */
+                .bg-white { background-color: white; }
+                .bg-gray-50 { background-color: #f9fafb; }
+                .bg-gray-100 { background-color: #f3f4f6; }
+                .bg-gray-200 { background-color: #e5e7eb; }
+                .bg-gray-800 { background-color: #1f2937; }
+                .bg-blue-50 { background-color: #eff6ff; }
+                .bg-blue-100 { background-color: #dbeafe; }
+                .bg-blue-500 { background-color: #3b82f6; }
+                .bg-blue-600 { background-color: #2563eb; }
+                .bg-green-50 { background-color: #f0fdf4; }
+                .bg-green-100 { background-color: #dcfce7; }
+                .bg-green-500 { background-color: #10b981; }
+                .bg-red-50 { background-color: #fef2f2; }
+                .bg-red-100 { background-color: #fee2e2; }
+                .bg-red-500 { background-color: #ef4444; }
+                .bg-yellow-50 { background-color: #fefce8; }
+                .bg-yellow-100 { background-color: #fef3c7; }
+                .bg-purple-50 { background-color: #faf5ff; }
+                .bg-purple-100 { background-color: #f3e8ff; }
+                .bg-pink-50 { background-color: #fdf2f8; }
+                .bg-pink-100 { background-color: #fce7f3; }
+                .bg-indigo-50 { background-color: #eef2ff; }
+                .bg-indigo-100 { background-color: #e0e7ff; }
+                .bg-orange-50 { background-color: #fff7ed; }
+                .bg-orange-100 { background-color: #ffedd5; }
+                .bg-teal-50 { background-color: #f0fdfa; }
+                .bg-teal-100 { background-color: #ccfbf1; }
+                .bg-cyan-50 { background-color: #ecfeff; }
+                .bg-cyan-100 { background-color: #cffafe; }
+                .bg-lime-50 { background-color: #f7fee7; }
+                .bg-lime-100 { background-color: #ecfccb; }
+                .bg-amber-50 { background-color: #fffbeb; }
+                .bg-amber-100 { background-color: #fef3c7; }
+                .bg-emerald-50 { background-color: #ecfdf5; }
+                .bg-emerald-100 { background-color: #d1fae5; }
+                .bg-violet-50 { background-color: #f5f3ff; }
+                .bg-violet-100 { background-color: #ede9fe; }
+                .bg-fuchsia-50 { background-color: #fdf4ff; }
+                .bg-fuchsia-100 { background-color: #fae8ff; }
+                .bg-rose-50 { background-color: #fff1f2; }
+                .bg-rose-100 { background-color: #ffe4e6; }
+                .bg-sky-50 { background-color: #f0f9ff; }
+                .bg-sky-100 { background-color: #e0f2fe; }
+
+                /* Borders */
+                .border { border-width: 1px; }
+                .border-0 { border-width: 0; }
+                .border-2 { border-width: 2px; }
+                .border-t { border-top-width: 1px; }
+                .border-b { border-bottom-width: 1px; }
+                .border-l-4 { border-left-width: 4px; }
+
+                /* Button borders - removed */
+                .border-transparent { border-color: transparent; }
+                .border-gray-200 { border-color: #e5e7eb; }
+                .border-gray-300 { border-color: #d1d5db; }
+                .border-blue-300 { border-color: #93c5fd; }
+                .border-blue-500 { border-color: #3b82f6; }
+                .border-green-300 { border-color: #86efac; }
+                .border-green-500 { border-color: #10b981; }
+                .border-red-300 { border-color: #fca5a5; }
+                .border-yellow-300 { border-color: #fde047; }
+                .border-yellow-500 { border-color: #eab308; }
+                .border-purple-300 { border-color: #d8b4fe; }
+                .border-purple-500 { border-color: #8b5cf6; }
+
+                .rounded { border-radius: 0.25rem; }
+                .rounded-lg { border-radius: 0.5rem; }
+                .rounded-xl { border-radius: 0.75rem; }
+                .rounded-full { border-radius: 9999px; }
+
+                /* Effects */
+                .shadow { box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06); }
+                .shadow-md { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); }
+                .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+
+                /* Interactivity */
+                .cursor-pointer { cursor: pointer; }
+                .cursor-not-allowed { cursor: not-allowed; }
+
+                .opacity-50 { opacity: 0.5; }
+                .opacity-100 { opacity: 1; }
+
+                .hidden { display: none; }
+                .block { display: block; }
+                .inline-block { display: inline-block; }
+
+                .overflow-hidden { overflow: hidden; }
+                .overflow-y-auto { overflow-y: auto; }
+                .overflow-x-auto { overflow-x: auto; }
+
+                .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .whitespace-nowrap { white-space: nowrap; }
+                .whitespace-pre { white-space: pre; }
+                .whitespace-pre-wrap { white-space: pre-wrap; }
+                .break-words { overflow-wrap: break-word; }
+
+                .resize-none { resize: none; }
+                .outline-none { outline: 2px solid transparent; outline-offset: 2px; }
+
+                /* Transitions */
+                .transition { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+                .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+                .transition-colors { transition-property: color, background-color, border-color, text-decoration-color, fill, stroke; transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); transition-duration: 150ms; }
+                .duration-200 { transition-duration: 200ms; }
+                .duration-300 { transition-duration: 300ms; }
+                .ease-in-out { transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+                .ease-out { transition-timing-function: cubic-bezier(0, 0, 0.2, 1); }
+
+                /* Transform */
+                .transform { transform: translate(var(--tw-translate-x), var(--tw-translate-y)) rotate(var(--tw-rotate)) skewX(var(--tw-skew-x)) skewY(var(--tw-skew-y)) scaleX(var(--tw-scale-x)) scaleY(var(--tw-scale-y)); }
+                .translate-y-2 { --tw-translate-y: 0.5rem; }
+                .-translate-y-2 { --tw-translate-y: -0.5rem; }
+
+                /* Hover states */
+                .hover\\:bg-blue-600:hover { background-color: #2563eb; }
+                .hover\\:bg-green-600:hover { background-color: #059669; }
+                .hover\\:bg-red-600:hover { background-color: #dc2626; }
+                .hover\\:bg-gray-50:hover { background-color: #f9fafb; }
+                .hover\\:bg-gray-100:hover { background-color: #f3f4f6; }
+                .hover\\:bg-gray-200:hover { background-color: #e5e7eb; }
+                .hover\\:border-gray-300:hover { border-color: #d1d5db; }
+                .hover\\:border-blue-300:hover { border-color: #93c5fd; }
+                .hover\\:text-gray-900:hover { color: #111827; }
+                .hover\\:text-white:hover { color: white; }
+                .hover\\:shadow-lg:hover { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+                .hover\\:scale-105:hover { transform: scale(1.05); }
+
+                /* Focus states */
+                .focus\\:ring-2:focus { --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color); --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color); box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000); }
+                .focus\\:ring-blue-500:focus { --tw-ring-opacity: 1; --tw-ring-color: rgb(59 130 246 / var(--tw-ring-opacity)); }
+                .focus\\:outline-none:focus { outline: 2px solid transparent; outline-offset: 2px; }
+
+                /* Disabled states */
+                .disabled\\:opacity-50:disabled { opacity: 0.5; }
+                .disabled\\:cursor-not-allowed:disabled { cursor: not-allowed; }
+
+                /* Group states */
+                .group:hover .group-hover\\:opacity-100 { opacity: 1; }
+                .group:hover .group-hover\\:visible { visibility: visible; }
+
+                /* Accessibility */
+                .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border-width: 0; }
+
+                /* Grid */
+                .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+                .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+                /* Responsive breakpoints */
+                @media (min-width: 768px) {
+                    .md\\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+                }
+
+                @media (min-width: 1024px) {
+                    .lg\\:flex-row { flex-direction: row; }
+                    .lg\\:w-2\\/5 { width: 40%; }
+                    .lg\\:w-3\\/5 { width: 60%; }
+                }
+            `;
+            }
+
+            generateAppStyles() {
+                return `
+            .claude-app-container {
+                height: calc(100vh - 2rem);
+            }
+
+            .claude-left-panel {
+                height: 100%;
+                overflow-y: hidden;
+            }
+
+            .claude-right-panel {
+                height: 100%;
+                overflow-y: auto; 
+                scrollbar-color: #cbd5e1 #f8fafc;
+            }
+
+            .claude-right-panel::-webkit-scrollbar {
+                width: 12px;
+            }
+
+            .claude-right-panel::-webkit-scrollbar-track {
+                background: #f8fafc;
+                border-radius: 4px;
+            }
+
+            .claude-right-panel::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 4px;
+            }
+
+            .claude-right-panel::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
+            }
+
+            /* Ensure message viewer has proper height */
+            message-viewer {
+                display: block;
+                height: 100%;
+            }
+
+            #conversationDetail {
+                display: flex;
+                flex-direction: column;
+            }
+
+            #initialState {
+                display: flex;
+                flex-direction: column;
+            }
+        `;
+            }
+
+            generateFileBrowserStyles() {
+                return `
+            .claude-file-tree {
+                overflow-y: auto;
+                max-height: calc(100vh - 380px);
+                min-height: 200px; 
+                scrollbar-color: #cbd5e1 #f8fafc;
+            }
+
+            .claude-file-tree::-webkit-scrollbar {
+                width: 12px;
+            }
+
+            .claude-file-tree::-webkit-scrollbar-track {
+                background: #f8fafc;
+                border-radius: 4px;
+            }
+
+            .claude-file-tree::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 4px;
+            }
+
+            .claude-file-tree::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
+            }
+
+            .claude-tree-node {
+                position: relative;
+            }
+
+            .claude-tree-children {
+                margin-left: 1.5rem;
+            }
+
+            .claude-tree-toggle {
+                width: 16px;
+                height: 16px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                margin-right: 4px;
+                border-radius: 2px;
+                transition: all 0.2s;
+            }
+
+            .claude-tree-toggle:hover {
+                background-color: #e5e7eb;
+            }
+
+            .claude-file-item {
+                transition: all 0.2s ease;
+            }
+
+            .claude-file-item:hover {
+                background-color: #f9fafb;
+            }
+
+            .claude-active-file {
+                background-color: #eff6ff;
+                border-color: #3b82f6;
+            }
+
+            .claude-file-preview {
+                max-height: 3.6rem;
+                overflow: hidden;
+                display: -webkit-box;
+                -webkit-box-orient: vertical;
+                -webkit-line-clamp: 3;
+                line-clamp: 3;
+            }
+
+            .claude-loading-spinner {
+                border: 3px solid #f3f3f3;
+                border-top: 3px solid #3b82f6;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                animation: claude-spin 1s linear infinite;
+                margin: 0 auto;
+            }
+
+            .loading-spinner {
+                border: 3px solid #f3f3f3;
+                border-top: 3px solid #3b82f6;
+                border-radius: 50%;
+                width: 30px;
+                height: 30px;
+                animation: claude-spin 1s linear infinite;
+                margin: 0 auto;
+            }
+
+            @keyframes claude-spin {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+        `;
+            }
+
+            generateMessageViewerStyles() {
+                return `
+            .message-user {
+                background-color: #f3f4f6;
+                border-left: 4px solid #3b82f6;
+                max-height: 400px;
+                overflow-y: auto;
+                width: 100%;
+            }
+
+            .message-assistant {
+                background-color: #f0f9ff;
+                border-left: 4px solid #10b981;
+                max-height: 400px;
+                overflow-y: auto;
+                width: 100%;
+            }
+
+            .message-system {
+                background-color: #fef3c7;
+                border-left: 4px solid #f59e0b;
+                max-height: 400px;
+                overflow-y: auto;
+                width: 100%;
+            }
+
+            .message-summary {
+                background-color: #fefce8;
+                border-left: 4px solid #eab308;
+                max-height: 400px;
+                overflow-y: auto;
+                width: 100%;
+            }
+
+            .message-tool {
+                background-color: #f5f3ff;
+                border-left: 4px solid #8b5cf6;
+                max-height: 400px;
+                overflow-y: auto;
+                width: 100%;
+            }
+
+            .conversation-card {
+                transition: all 0.3s ease;
+            }
+
+            .conversation-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+            }
+
+            .code-block {
+                font-family: 'Courier New', monospace;
+            }
+
+            .json-code {
+                background-color: #1f2937;
+                color: #f9fafb;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                overflow-x: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 0.875rem;
+                line-height: 1.25;
+            }
+
+            .json-key {
+                color: #8b5cf6;
+                font-weight: 600;
+            }
+
+            .json-string {
+                color: #10b981;
+            }
+
+            .json-number {
+                color: #3b82f6;
+            }
+
+            .json-boolean {
+                color: #f59e0b;
+            }
+
+            .json-null {
+                color: #ef4444;
+            }
+
+            .tool-call {
+                background-color: #f8fafc;
+                border: 1px solid #e2e8f0;
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+                margin-top: 0.5rem;
+            }
+
+            .tool-name {
+                font-weight: 600;
+                color: #7c3aed;
+                margin-bottom: 0.25rem;
+            }
+
+            .tool-description {
+                color: #4b5563;
+                font-size: 0.875rem;
+            }
+
+            .todo-list {
+                max-height: 40vh;
+                overflow-y: auto;
+            }
+
+            .fade-in {
+                animation: fadeIn 0.5s;
+            }
+
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+
+            /* Scrollbar styles */
+            .scroll-container {
+                overflow-y: auto;
+                scrollbar-width: thin;
+                scrollbar-color: #cbd5e1 #f8fafc;
+            }
+
+            .scroll-container::-webkit-scrollbar {
+                width: 12px;
+            }
+
+            .scroll-container::-webkit-scrollbar-track {
+                background: #f8fafc;
+                border-radius: 4px;
+            }
+
+            .scroll-container::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 4px;
+            }
+
+            .scroll-container::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
+            }
+
+            /* Message content scrollbar styling */
+            .message-user::-webkit-scrollbar,
+            .message-assistant::-webkit-scrollbar,
+            .message-system::-webkit-scrollbar,
+            .message-summary::-webkit-scrollbar {
+                width: 10px;
+            }
+
+            .message-user::-webkit-scrollbar-track,
+            .message-assistant::-webkit-scrollbar-track,
+            .message-system::-webkit-scrollbar-track,
+            .message-summary::-webkit-scrollbar-track {
+                background: rgba(0, 0, 0, 0.05);
+                border-radius: 3px;
+            }
+
+            .message-user::-webkit-scrollbar-thumb,
+            .message-assistant::-webkit-scrollbar-thumb,
+            .message-system::-webkit-scrollbar-thumb,
+            .message-summary::-webkit-scrollbar-thumb {
+                background: rgba(0, 0, 0, 0.2);
+                border-radius: 3px;
+            }
+
+            .message-user::-webkit-scrollbar-thumb:hover,
+            .message-assistant::-webkit-scrollbar-thumb:hover,
+            .message-system::-webkit-scrollbar-thumb:hover,
+            .message-summary::-webkit-scrollbar-thumb:hover {
+                background: rgba(0, 0, 0, 0.3);
+            }
+        `;
+            }
+
+            generateSessionNavigatorStyles() {
+                return `
+            .session-navigator {
+                background-color: white;
+                border-radius: 0.5rem;
+                padding: 1rem;
+                margin-top: 1rem;
+                border: 1px solid #e5e7eb;
+            }
+
+            .session-controls {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 0.5rem;
+            }
+
+            .session-info {
+                text-align: center;
+                flex: 1;
+                font-size: 0.875rem;
+                color: #6b7280;
+            }
+
+            .session-button {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+                transition: background-color 0.2s;
+            }
+
+            .session-button:hover:not(:disabled) {
+                background-color: #2563eb;
+            }
+
+            .session-button:disabled {
+                background-color: #9ca3af;
+                cursor: not-allowed;
+            }
+        `;
+            }
+
+            generateDiffModalStyles() {
+                return `
+            .diff-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background-color: rgba(0, 0, 0, 0.5);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 1000;
+            }
+
+            .diff-modal-content {
+                background-color: white;
+                border-radius: 0.5rem;
+                width: 95%;
+                max-width: 1400px;
+                height: 90vh;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .diff-modal-header {
+                padding: 1rem;
+                border-bottom: 1px solid #e5e7eb;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .diff-modal-body {
+                flex: 1;
+                overflow: hidden;
+                display: flex;
+                min-height: 0;
+            }
+
+            .diff-panel {
+                flex: 1;
+                padding: 1rem;
+                border-right: 1px solid #e5e7eb;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .diff-panel:last-child {
+                border-right: none;
+            }
+
+            .diff-panel-header {
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+                color: #374151;
+            }
+
+            .diff-textarea {
+                flex: 1;
+                border: 1px solid #d1d5db;
+                border-radius: 0.375rem;
+                padding: 0.75rem;
+                font-family: 'Courier New', monospace;
+                font-size: 0.875rem;
+                resize: none;
+                background-color: #f9fafb;
+                overflow: auto;
+                white-space: pre;
+            }
+
+            .diff-textarea:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            }
+
+            .diff-button {
+                background-color: #3b82f6;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+                transition: background-color 0.2s;
+            }
+
+            .diff-button:hover {
+                background-color: #2563eb;
+            }
+
+            .diff-button-secondary {
+                background-color: #6b7280;
+                color: white;
+                border: none;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                cursor: pointer;
+                font-size: 0.875rem;
+                transition: background-color 0.2s;
+            }
+
+            .diff-button-secondary:hover {
+                background-color: #4b5563;
+            }
+
+            .diff-comparison {
+                flex: 1;
+                padding: 0.75rem;
+                background-color: #f9fafb;
+                border-radius: 0.375rem;
+                border: 1px solid #d1d5db;
+                overflow-y: auto;
+                font-family: 'Courier New', monospace;
+                font-size: 0.875rem;
+            }
+
+            .diff-comparison-header {
+                font-weight: 600;
+                margin-bottom: 0.5rem;
+                color: #374151;
+            }
+
+            .diff-line {
+                margin-bottom: 0.25rem;
+                font-family: 'Courier New', monospace;
+                font-size: 0.875rem;
+            }
+
+            .diff-added {
+                background-color: #dcfce7;
+                color: #166534;
+                padding: 0.125rem 0.25rem;
+                border-radius: 0.125rem;
+            }
+
+            .diff-removed {
+                background-color: #fee2e2;
+                color: #991b1b;
+                padding: 0.125rem 0.25rem;
+                border-radius: 0.125rem;
+            }
+
+            .diff-unchanged {
+                color: #6b7280;
+            }
+
+            .diff-edit-tabs {
+                display: flex;
+                border-bottom: 1px solid #e5e7eb;
+                background-color: #f9fafb;
+                padding: 0 1rem;
+            }
+
+            .diff-edit-tab {
+                background: none;
+                border: none;
+                padding: 0.75rem 1rem;
+                cursor: pointer;
+                border-bottom: 2px solid transparent;
+                color: #6b7280;
+                font-size: 0.875rem;
+                transition: all 0.2s;
+                white-space: nowrap;
+            }
+
+            .diff-edit-tab:hover {
+                color: #374151;
+                background-color: #f3f4f6;
+            }
+
+            .diff-edit-tab.active {
+                color: #3b82f6;
+                border-bottom-color: #3b82f6;
+                background-color: #ffffff;
+            }
+
+            .diff-content-tabs {
+                display: flex;
+                border-bottom: 1px solid #e5e7eb;
+                margin-bottom: 1rem;
+            }
+
+            .diff-content-tab {
+                background: none;
+                border: none;
+                padding: 0.5rem 1rem;
+                cursor: pointer;
+                border-bottom: 2px solid transparent;
+                color: #6b7280;
+                font-size: 0.875rem;
+                transition: all 0.2s;
+            }
+
+            .diff-content-tab:hover {
+                color: #374151;
+                background-color: #f9fafb;
+            }
+
+            .diff-content-tab.active {
+                color: #3b82f6;
+                border-bottom-color: #3b82f6;
+                background-color: #f0f9ff;
+            }
+
+            .diff-content-area {
+                flex: 1;
+                display: flex;
+                overflow: hidden;
+            }
+
+            .diff-panel {
+                display: none;
+                flex: 1;
+                overflow: hidden;
+                flex-direction: column;
+                padding: 1rem;
+                border-right: 1px solid #e5e7eb;
+            }
+
+            .diff-panel:last-child {
+                border-right: none;
+            }
+
+            .diff-panel.active {
+                display: flex;
+            }
+        `;
+            }
+
+            // Get specific style groups
+            getStyles(component) {
+                return this.styles[component] || '';
+            }
+
+            getAppStyles() {
+                return this.styles.app;
+            }
+
+            getFileBrowserStyles() {
+                return this.styles.fileBrowser;
+            }
+
+            getMessageViewerStyles() {
+                return this.styles.messageViewer;
+            }
+
+            getSessionNavigatorStyles() {
+                return this.styles.sessionNavigator;
+            }
+
+            getDiffModalStyles() {
+                return this.generateDiffModalStyles();
+            }
+        }
+
+
+        // Central data management component
+        class DataManager {
+            constructor() {
+                this.directoryHandle = null;
+                this.projectData = {
+                    projects: {},
+                    sessions: {},
+                    currentSessionIndex: 0,
+                    currentFileSessions: [],
+                    currentFile: null
+                };
+                this.editDataMap = new Map();
+                this.DB_NAME = 'ClaudeCodeHistoryViewer';
+                this.DB_VERSION = 1;
+                this.STORE_NAME = 'directoryHandles';
+                this.languageManager = window.languageManager;
+            }
+
+            // Directory handle management
+            async setDirectoryHandle(handle) {
+                this.directoryHandle = handle;
+                await this.saveDirectoryHandle(handle);
+            }
+
+            getDirectoryHandle() {
+                return this.directoryHandle;
+            }
+
+            // Project data management
+            getProjectData() {
+                return this.projectData;
+            }
+
+            setProjectData(data) {
+                this.projectData = { ...this.projectData, ...data };
+            }
+
+            // Session management
+            getCurrentSession() {
+                const sessionId = this.projectData.currentFileSessions[this.projectData.currentSessionIndex];
+                return this.projectData.sessions[sessionId];
+            }
+
+            setCurrentSessionIndex(index) {
+                this.projectData.currentSessionIndex = index;
+            }
+
+            // Edit data management
+            getEditData(id) {
+                return this.editDataMap.get(id);
+            }
+
+            setEditData(id, data) {
+                this.editDataMap.set(id, data);
+            }
+
+            // IndexedDB operations
+            async openDatabase() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(this.DB_NAME, this.DB_VERSION);
+
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => resolve(request.result);
+
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+                            db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+                        }
+                    };
+                });
+            }
+
+            async saveDirectoryHandle(handle) {
+                try {
+                    const db = await this.openDatabase();
+                    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(this.STORE_NAME);
+
+                    const directoryData = {
+                        id: 'last_directory',
+                        name: handle.name,
+                        handle: handle,
+                        timestamp: Date.now()
+                    };
+
+                    await store.put(directoryData);
+                    return true;
+                } catch (error) {
+                    console.error('saveDirectoryHandle error:', error);
+                    return false;
+                }
+            }
+
+            async getLastDirectoryHandle() {
+                try {
+                    const db = await this.openDatabase();
+                    const transaction = db.transaction([this.STORE_NAME], 'readonly');
+                    const store = transaction.objectStore(this.STORE_NAME);
+
+                    return new Promise((resolve, reject) => {
+                        const request = store.get('last_directory');
+                        request.onsuccess = () => resolve(request.result);
+                        request.onerror = () => reject(request.error);
+                    });
+                } catch (error) {
+                    console.error('getLastDirectoryHandle error:', error);
+                    return null;
+                }
+            }
+
+            async reset() {
+                try {
+                    // Clear IndexedDB
+                    const db = await this.openDatabase();
+                    const transaction = db.transaction([this.STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(this.STORE_NAME);
+                    await store.delete('last_directory');
+
+                    // Reset data
+                    this.directoryHandle = null;
+                    this.projectData = {
+                        projects: {},
+                        sessions: {},
+                        currentSessionIndex: 0,
+                        currentFileSessions: [],
+                        currentFile: null
+                    };
+                    this.editDataMap.clear();
+
+                    console.log('DataManager reset');
+                } catch (error) {
+                    console.error('DataManager reset error:', error);
+                    throw error;
+                }
+            }
+
+            // Project loading operations
+            async loadProject() {
+                if (!this.directoryHandle) {
+                    throw new Error('没有选择目录');
+                }
+
+                // Reset project data
+                this.projectData = {
+                    projects: {},
+                    sessions: {},
+                    currentSessionIndex: 0,
+                    currentFileSessions: [],
+                    currentFile: null
+                };
+
+                // Traverse directory
+                await this.traverseDirectory(this.directoryHandle, '');
+            }
+
+            async traverseDirectory(handle, path) {
+                const files = [];
+
+                try {
+                    for await (const entry of handle.values()) {
+                        const entryPath = path ? `${path}/${entry.name}` : entry.name;
+
+                        if (entry.kind === 'file') {
+                            const fileObj = await entry.getFile();
+                            const fileInfo = {
+                                name: entry.name,
+                                type: 'file',
+                                path: entryPath,
+                                handle: entry,
+                                extension: entry.name.split('.').pop().toLowerCase(),
+                                lastModified: fileObj.lastModified
+                            };
+
+                            files.push(fileInfo);
+
+                            // Add JSONL files to project data
+                            if (fileInfo.extension === 'jsonl' || fileInfo.extension === 'json' || fileInfo.extension === 'txt') {
+                                if (!this.projectData.projects[path]) {
+                                    this.projectData.projects[path] = {
+                                        name: path || 'root',
+                                        path: path,
+                                        files: []
+                                    };
+                                }
+                                this.projectData.projects[path].files.push(fileInfo);
+                            }
+                        } else if (entry.kind === 'directory') {
+                            const dirInfo = {
+                                name: entry.name,
+                                type: 'folder',
+                                path: entryPath,
+                                handle: entry,
+                                children: []
+                            };
+
+                            // Recursively traverse subdirectory
+                            const subFiles = await this.traverseDirectory(entry, entryPath);
+                            dirInfo.children = subFiles;
+                            files.push(dirInfo);
+                        }
+                    }
+                } catch (error) {
+                    console.error('traverseDirectory error:', error);
+                }
+
+                return files;
+            }
+
+            // File parsing operations
+            async parseJSONL(content, fileName) {
+                const lines = content.split('\n').filter(line => line.trim());
+                const currentFileSessions = [];
+                const currentFileSessionsData = {};
+
+                for (let i = 0; i < lines.length; i++) {
+                    try {
+                        const jsonData = JSON.parse(lines[i]);
+
+                        // Extract basic info
+                        let sessionId = jsonData.sessionId;
+                        const timestamp = jsonData.timestamp;
+                        const type = jsonData.type;
+                        const uuid = jsonData.uuid;
+                        const parentUuid = jsonData.parentUuid;
+
+                        // Generate sessionId if not present
+                        if (!sessionId) {
+                            sessionId = fileName.replace(/\.[^/.]+$/, '');
+                        }
+
+                        // Initialize session data
+                        if (!currentFileSessionsData[sessionId]) {
+                            currentFileSessionsData[sessionId] = {
+                                id: sessionId,
+                                messages: [],
+                                startTime: timestamp,
+                                endTime: timestamp,
+                                fileName: fileName
+                            };
+                            currentFileSessions.push(sessionId);
+                        }
+
+                        // Update session time range
+                        if (timestamp < currentFileSessionsData[sessionId].startTime) {
+                            currentFileSessionsData[sessionId].startTime = timestamp;
+                        }
+                        if (timestamp > currentFileSessionsData[sessionId].endTime) {
+                            currentFileSessionsData[sessionId].endTime = timestamp;
+                        }
+
+                        // Create message object
+                        const message = {
+                            id: uuid,
+                            sessionId: sessionId,
+                            timestamp: timestamp,
+                            type: type,
+                            parentUuid: parentUuid,
+                            rawData: jsonData
+                        };
+
+                        // Extract content based on type
+                        if (type === 'user') {
+                            message.role = 'user';
+                            message.content = this.extractUserContent(jsonData);
+                        } else if (type === 'assistant') {
+                            message.role = 'assistant';
+                            message.content = this.extractAssistantContent(jsonData);
+                        } else if (type === 'summary') {
+                            message.role = 'summary';
+                            message.content = this.extractSummaryContent(jsonData);
+                        } else if (type === 'system') {
+                            message.role = 'system';
+                            message.content = this.extractSystemContent(jsonData);
+                        }
+
+                        // Add to session
+                        currentFileSessionsData[sessionId].messages.push(message);
+
+                    } catch (error) {
+                        console.error('parse JSON error  (line: ' + (i + 1) + '):', error);
+                    }
+                }
+
+                // Sort messages by time
+                currentFileSessions.forEach(sessionId => {
+                    if (currentFileSessionsData[sessionId] && currentFileSessionsData[sessionId].messages) {
+                        currentFileSessionsData[sessionId].messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    }
+                });
+
+                // Update project data
+                this.projectData.currentFileSessions = currentFileSessions;
+                this.projectData.sessions = currentFileSessionsData;
+            }
+
+            // Content extraction methods
+            extractUserContent(data) {
+                if (!data) return this.languageManager.get('noContent');
+
+                if (data.message && typeof data.message.content === 'string') {
+                    let content = data.message.content;
+
+                    // Handle local-command-stdout tags
+                    if (content.includes('<local-command-stdout>')) {
+                        const stdoutMatch = content.match(/<local-command-stdout>([\s\S]*?)<\/local-command-stdout>/);
+                        if (stdoutMatch && stdoutMatch[1]) {
+                            const cleanedStdout = this.removeANSICodes(stdoutMatch[1]);
+                            content = content.replace(
+                                /<local-command-stdout>[\s\S]*?<\/local-command-stdout>/,
+                                `\n\n**${this.languageManager.get('commandOutput')}:**\n\`\`\`\n${cleanedStdout}\n\`\`\`\n`
+                            );
+                        }
+                    }
+
+                    return content;
+                }
+
+                if (data.message && Array.isArray(data.message.content)) {
+                    return data.message.content.map(item => {
+                        if (item.type === 'tool_result') {
+                            let content = item.content || this.languageManager.get('noContent');
+                            if (typeof content === 'string' && /<[^>]*>/.test(content)) {
+                                content = content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                            }
+                            return `[${this.languageManager.get('toolResultLabel')}] ${content}`;
+                        }
+                        return item.content || JSON.stringify(item);
+                    }).join('\n');
+                }
+
+                return JSON.stringify(data.message || data);
+            }
+
+            extractAssistantContent(data) {
+                if (!data) return this.languageManager.get('noContent');
+
+                if (data.message && data.message.content) {
+                    if (Array.isArray(data.message.content)) {
+                        return data.message.content.map(item => {
+                            if (item.type === 'text') {
+                                return item.text || this.languageManager.get('noTextContent');
+                            } else if (item.type === 'tool_use') {
+                                return `[${this.languageManager.get('toolCallLabel')}: ${item.name || this.languageManager.get('unknownTool')}] ${JSON.stringify(item.input || {})}`;
+                            }
+                            return JSON.stringify(item);
+                        }).join('\n');
+                    } else if (typeof data.message.content === 'string') {
+                        return data.message.content;
+                    }
+                }
+
+                return JSON.stringify(data.message || data);
+            }
+
+            extractSummaryContent(data) {
+                if (!data) return this.languageManager.get('noContent');
+                return data.summary || JSON.stringify(data);
+            }
+
+            extractSystemContent(data) {
+                if (!data) return this.languageManager.get('noContent');
+                return data.content || JSON.stringify(data);
+            }
+
+            removeANSICodes(text) {
+                if (!text || typeof text !== 'string') return text;
+
+                const ansiRegex = [
+                    /\u001b\[[0-9;]*m/g,
+                    /\u001b\[[0-9;]*[ABCDEFGHJKSTfmnsulh]/g,
+                    /\u001b\[[0-9]*[JK]/g,
+                    /\u001b\[[0-9]*[ABCD]/g,
+                    /\u001b\[[0-9;]*[Hf]/g,
+                    /\u001b\[[0-9]*[su]/g,
+                    /\u001b\[\?[0-9;]*[hl]/g,
+                    /\u001b\][0-9];.*?\u001b\\/g,
+                    /\u001b\][0-9][0-9];.*?\u001b\\/g,
+                    /\u001b\][0-9][0-9][0-9];.*?\u001b\\/g,
+                    /\u001b\][0-9];.*?\u0007/g,
+                    /\u001b\][0-9][0-9];.*?\u0007/g,
+                    /\u001b\][0-9][0-9][0-9];.*?\u0007/g
+                ];
+
+                let cleanedText = text;
+                ansiRegex.forEach(regex => {
+                    cleanedText = cleanedText.replace(regex, '');
+                });
+
+                return cleanedText;
+            }
+
+            // Utility methods
+            formatFileDate(timestamp) {
+                const date = new Date(timestamp);
+                const now = new Date();
+
+                // 将日期归零到当天 00:00:00 来计算天数差
+                const dateDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+                const nowDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const diffTime = nowDay - dateDay;
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+                if (diffDays === 0) {
+                    return this.languageManager.get('today') + ' ' + date.toLocaleTimeString({ hour: '2-digit', minute: '2-digit' });
+                } else if (diffDays === 1) {
+                    return this.languageManager.get('yesterday') + ' ' + date.toLocaleTimeString({ hour: '2-digit', minute: '2-digit' });
+                } else if (diffDays >= 2 && diffDays <= 6) {
+                    return `${diffDays}${this.languageManager.get('daysAgo')}` + ' ' + date.toLocaleTimeString({ hour: '2-digit', minute: '2-digit' });
+                } else {
+                    return date.toLocaleString();
+                }
+            }
+        }
+
+
+        // File browser component
+        class FileBrowser extends HTMLElement {
+            constructor() {
+                super();
+                this.dataManager = window.dataManager;
+                this.styleManager = window.styleManager || new StyleManager();
+                this.languageManager = window.languageManager;
+                this.attachShadow({ mode: 'open' });
+                this.projectData = null;
+            }
+
+            connectedCallback() {
+                this.render();
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+            <style>
+                ${this.styleManager.generateTailwindStyles()}
+                ${this.styleManager.getFileBrowserStyles()}
+            </style>
+            <div class="bg-white rounded-xl shadow-md p-4 flex-1 hidden" id="projectStructure">
+                <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                    <span class="text-purple-500 mr-2">📊</span>
+                    <span id="projectStructureTitle">${this.languageManager.get('projectStructure')}</span>
+                </h2>
+                <div id="fileTree" class="bg-gray-50 rounded-lg p-3 claude-file-tree">
+                    <!-- File tree will be dynamically generated -->
+                </div>
+            </div>
+        `;
+            }
+
+            updateProject(projectData) {
+                this.projectData = projectData;
+                this.show();
+                this.generateFileTree();
+                this.loadFilePreviews();
+            }
+
+            show() {
+                this.shadowRoot.getElementById('projectStructure').classList.remove('hidden');
+            }
+
+            hide() {
+                this.shadowRoot.getElementById('projectStructure').classList.add('hidden');
+            }
+
+            generateFileTree() {
+                const fileTree = this.shadowRoot.getElementById('fileTree');
+                fileTree.innerHTML = '';
+
+                if (!this.projectData || !this.projectData.projects) {
+                    fileTree.innerHTML = `<div class="text-center text-gray-500 py-4">${this.languageManager.get('noProjectData')}</div>`;
+                    return;
+                }
+
+                // Add project name
+                const directoryHandle = this.dataManager.getDirectoryHandle();
+                if (directoryHandle) {
+                    const projectHeader = document.createElement('div');
+                    projectHeader.className = 'text-sm font-medium text-gray-700 mb-2 flex items-center';
+                    projectHeader.innerHTML = `<span class="text-yellow-500 mr-2">📁</span> ${directoryHandle.name}`;
+                    fileTree.appendChild(projectHeader);
+                }
+
+                // Add file list
+                const fileList = document.createElement('div');
+                fileList.className = 'ml-2 space-y-1';
+
+                // Organize file structure - show all projects
+                Object.values(this.projectData.projects).forEach(project => {
+                    // Sort files by time (newest first)
+                    if (project.files && project.files.length > 0) {
+                        project.files.sort((a, b) => b.lastModified - a.lastModified);
+                    }
+                    const projectElement = this.createProjectElement(project);
+                    fileList.appendChild(projectElement);
+                });
+
+                fileTree.appendChild(fileList);
+            }
+
+            createProjectElement(project) {
+                const element = document.createElement('div');
+                element.className = 'claude-tree-node';
+
+                const projectHeader = document.createElement('div');
+                projectHeader.className = 'flex items-center py-1 cursor-pointer';
+
+                const toggle = document.createElement('span');
+                toggle.className = 'claude-tree-toggle';
+                toggle.innerHTML = '<span class="text-xs">▶</span>';
+
+                const icon = document.createElement('span');
+                icon.className = 'text-blue-500 mr-2';
+                icon.textContent = '📁';
+
+                const name = document.createElement('span');
+                name.className = 'text-gray-700 text-sm';
+                name.textContent = project.name || this.languageManager.get('unnamedProject');
+
+                projectHeader.appendChild(toggle);
+                projectHeader.appendChild(icon);
+                projectHeader.appendChild(name);
+
+                const childrenContainer = document.createElement('div');
+                childrenContainer.className = 'claude-tree-children hidden';
+
+                // Add files in project
+                if (project.files && project.files.length > 0) {
+                    project.files.forEach(file => {
+                        const fileElement = this.createFileElement(file);
+                        childrenContainer.appendChild(fileElement);
+                    });
+                }
+
+                // Click to expand/collapse project
+                projectHeader.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    childrenContainer.classList.toggle('hidden');
+                    if (childrenContainer.classList.contains('hidden')) {
+                        toggle.innerHTML = '<span class="text-xs">▶</span>';
+                    } else {
+                        toggle.innerHTML = '<span class="text-xs">▼</span>';
+                    }
+                });
+
+                element.appendChild(projectHeader);
+                element.appendChild(childrenContainer);
+
+                return element;
+            }
+
+            createFileElement(file) {
+                const element = document.createElement('div');
+                element.className = 'claude-file-item flex flex-col text-gray-600 py-2 px-2 rounded cursor-pointer ml-4 text-sm border-0 hover:bg-gray-50';
+
+                // File icon and date
+                const fileHeader = document.createElement('div');
+                fileHeader.className = 'flex items-center';
+
+                // File icon
+                const fileIcon = document.createElement('span');
+                fileIcon.className = 'text-green-500 mr-2';
+                fileIcon.textContent = '📄';
+
+                // File date
+                const fileDate = document.createElement('span');
+                fileDate.className = 'font-medium';
+                fileDate.textContent = this.dataManager.formatFileDate(file.lastModified);
+
+                fileHeader.appendChild(fileIcon);
+                fileHeader.appendChild(fileDate);
+
+                // File preview
+                const filePreview = document.createElement('div');
+                filePreview.className = 'claude-file-preview text-xs text-gray-500 mt-1 ml-4';
+                filePreview.textContent = this.languageManager.get('loadingPreview');
+                filePreview.setAttribute('data-file-name', file.name);
+
+                element.appendChild(fileHeader);
+                element.appendChild(filePreview);
+
+                // Click file to load content
+                element.addEventListener('click', async () => {
+                    // Remove previous selection
+                    this.shadowRoot.querySelectorAll('.claude-file-item').forEach(item => {
+                        item.classList.remove('claude-active-file');
+                    });
+
+                    // Add current selection
+                    element.classList.add('claude-active-file');
+
+                    await this.loadFileContent(file);
+                    console.log('File loaded:', file.name);
+                });
+
+                return element;
+            }
+
+            async loadFileContent(file) {
+                try {
+                    // Reset current file data
+                    this.dataManager.projectData.currentFileSessions = [];
+                    this.dataManager.projectData.currentSessionIndex = 0;
+
+                    // Read file content
+                    const fileObj = await file.handle.getFile();
+                    const content = await fileObj.text();
+
+                    // Parse JSONL file
+                    await this.dataManager.parseJSONL(content, file.name);
+
+                    // Show session or empty state
+                    const mainApp = document.querySelector('claude-history-app');
+                    let messageViewer = null;
+
+                    if (mainApp) {
+                        messageViewer = mainApp.getMessageViewer();
+                    } else {
+                        // Fallback: try to find message viewer in document
+                        messageViewer = document.querySelector('message-viewer');
+                    }
+
+                    console.log('Message viewer found:', !!messageViewer);
+                    console.log('Sessions found:', this.dataManager.projectData.currentFileSessions.length);
+
+                    if (messageViewer) {
+                        if (this.dataManager.projectData.currentFileSessions.length === 0) {
+                            console.log('Showing no sessions state');
+                            messageViewer.showNoSessions();
+                        } else {
+                            // Show first session by default
+                            this.dataManager.projectData.currentSessionIndex = 0;
+                            const sessionId = this.dataManager.projectData.currentFileSessions[0];
+                            const session = this.dataManager.projectData.sessions[sessionId];
+                            console.log('Showing session:', sessionId, session);
+                            messageViewer.showSession(session);
+                        }
+                    } else {
+                        console.error('Message viewer not found!');
+                    }
+
+                } catch (error) {
+                    console.error('loadFileContent error:', error);
+                    alert(`${this.languageManager.get('readFileError')}: ${error.message}`);
+                }
+            }
+
+            async loadFilePreviews() {
+                if (!this.projectData || !this.projectData.projects) return;
+
+                const allFiles = [];
+                Object.values(this.projectData.projects).forEach(project => {
+                    if (project.files && project.files.length > 0) {
+                        allFiles.push(...project.files);
+                    }
+                });
+
+                // Load previews asynchronously
+                for (let i = 0; i < allFiles.length; i++) {
+                    setTimeout(() => this.loadFilePreview(allFiles[i]), 300);
+                }
+            }
+
+            async loadFilePreview(file) {
+                try {
+                    const fileObj = await file.handle.getFile();
+                    const content = await fileObj.text();
+                    const fileName = fileObj.name;
+
+                    // Parse JSONL for preview
+                    const sessions = await this.parseJSONLForPreview(content, fileName);
+
+                    // Update file preview element
+                    this.updateFilePreviewElement(file, sessions);
+
+                } catch (error) {
+                    console.error('loadFilePreview error:', file.name, error);
+                    this.updateFilePreviewElement(file, []);
+                }
+            }
+
+            async parseJSONLForPreview(content, fileName) {
+                const lines = content.split('\n').filter(line => line.trim());
+                const sessions = [];
+
+                for (let i = 0; i < lines.length; i++) {
+                    try {
+                        const jsonData = JSON.parse(lines[i]);
+
+                        // Extract basic info
+                        let sessionId = jsonData.sessionId;
+                        const timestamp = jsonData.timestamp;
+                        const type = jsonData.type;
+
+                        // Generate sessionId if not present
+                        if (!sessionId) {
+                            sessionId = fileName.replace(/\.[^/.]+$/, '');
+                        }
+
+                        // Find or create session
+                        let session = sessions.find(s => s.id === sessionId);
+                        if (!session) {
+                            session = {
+                                id: sessionId,
+                                messages: [],
+                                startTime: timestamp,
+                                endTime: timestamp
+                            };
+                            sessions.push(session);
+                        }
+
+                        // Update session time range
+                        if (timestamp < session.startTime) {
+                            session.startTime = timestamp;
+                        }
+                        if (timestamp > session.endTime) {
+                            session.endTime = timestamp;
+                        }
+
+                        // Create message object
+                        const message = {
+                            timestamp: timestamp,
+                            type: type,
+                            rawData: jsonData
+                        };
+
+                        // Extract content based on type
+                        if (type === 'user') {
+                            message.role = 'user';
+                            message.content = this.dataManager.extractUserContent(jsonData);
+                        } else if (type === 'assistant') {
+                            message.role = 'assistant';
+                            message.content = this.dataManager.extractAssistantContent(jsonData);
+                        }
+
+                        // Add to session
+                        session.messages.push(message);
+
+                    } catch (error) {
+                        // Ignore parsing errors
+                        console.error('parseJSONLForPreview error (line: ' + (i + 1) + '):', error);
+                    }
+                }
+
+                // Sort messages by time
+                sessions.forEach(session => {
+                    if (session.messages) {
+                        session.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    }
+                });
+
+                return sessions;
+            }
+
+            updateFilePreviewElement(file, sessions) {
+                // Find corresponding file element by data-file-name attribute using direct selector
+                const previewElement = this.shadowRoot.querySelector(`.claude-file-preview[data-file-name="${file.name}"]`);
+
+                if (!previewElement) return;
+
+                if (sessions.length === 0) {
+                    previewElement.textContent = this.languageManager.get('noValidSessions');
+                    previewElement.classList.remove('text-gray-500');
+                    previewElement.classList.add('text-gray-400');
+                } else {
+                    // Get first user message from first session as preview
+                    const firstSession = sessions[0];
+                    if (firstSession && firstSession.messages && firstSession.messages.length > 0) {
+                        // Find the first user message specifically
+                        const firstUserMessage = firstSession.messages.find(msg => msg.role === 'user');
+                        let previewText = firstUserMessage ? firstUserMessage.content : this.languageManager.get('noUserMessage');
+
+                        if (previewText.length > 100) {
+                            previewText = previewText.substring(0, 100) + '...';
+                        }
+
+                        previewElement.textContent = previewText;
+                        previewElement.classList.remove('text-gray-500');
+                        previewElement.classList.add('text-gray-600');
+                    } else {
+                        previewElement.textContent = this.languageManager.get('noMessageContent');
+                        previewElement.classList.remove('text-gray-500');
+                        previewElement.classList.add('text-gray-400');
+                    }
+                }
+            }
+
+            expandAll() {
+                const treeChildren = this.shadowRoot.querySelectorAll('.claude-tree-children');
+                if (treeChildren.length === 0) return;
+
+                treeChildren.forEach(el => {
+                    el.classList.remove('hidden');
+                });
+                this.shadowRoot.querySelectorAll('.claude-tree-toggle').forEach(toggle => {
+                    toggle.innerHTML = '<span class="text-xs">▼</span>';
+                });
+            }
+
+            collapseAll() {
+                const treeChildren = this.shadowRoot.querySelectorAll('.claude-tree-children');
+                if (treeChildren.length === 0) return;
+
+                treeChildren.forEach(el => {
+                    el.classList.add('hidden');
+                });
+                this.shadowRoot.querySelectorAll('.claude-tree-toggle').forEach(toggle => {
+                    toggle.innerHTML = '<span class="text-xs">▶</span>';
+                });
+            }
+
+            updateLanguage() {
+                // Update file browser UI elements with current language
+                const projectStructureTitle = this.shadowRoot.getElementById('projectStructureTitle');
+                if (projectStructureTitle) {
+                    projectStructureTitle.textContent = this.languageManager.get('projectStructure');
+                }
+
+                // Update file previews if they exist
+                const loadingPreviews = this.shadowRoot.querySelectorAll('.claude-file-preview');
+                loadingPreviews.forEach(preview => {
+                    if (preview.textContent === this.languageManager.get('loadingPreview') ||
+                        preview.textContent === '加载中...') {
+                        preview.textContent = this.languageManager.get('loadingPreview');
+                    }
+                });
+            }
+        }
+
+
+        // Message viewer component
+        class MessageViewer extends HTMLElement {
+            constructor() {
+                super();
+                this.dataManager = window.dataManager;
+                this.styleManager = window.styleManager || new StyleManager();
+                this.languageManager = window.languageManager;
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+                this.showInitialState();
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+            <style>
+                ${this.styleManager.generateTailwindStyles()}
+                ${this.styleManager.getMessageViewerStyles()}
+                ${this.styleManager.getDiffModalStyles()}
+            </style>
+            <div id="conversationDetail" class="bg-white rounded-xl shadow-md p-4 h-full hidden flex flex-col">
+                <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                    <span class="text-yellow-500 mr-2">💬</span>${this.languageManager.get('conversationDetails')}
+                </h2>
+                <div id="conversationContent" class="flex-1">
+                    <!-- Conversation content will be dynamically generated -->
+                </div>
+            </div>
+
+            <!-- Initial state -->
+            <div id="initialState"
+                class="bg-white rounded-xl shadow-md p-6 h-full flex flex-col items-center justify-center text-center">
+                <span class="text-5xl text-gray-400 mb-4">📁</span>
+                <h3 class="text-xl font-semibold text-gray-700 mb-2">${this.languageManager.get('initialStateTitle')}</h3>
+                <p class="text-gray-500 max-w-md">${this.languageManager.get('initialStateDescription')}</p>
+            </div>
+        `;
+            }
+
+            showInitialState() {
+                this.shadowRoot.getElementById('initialState').classList.remove('hidden');
+                this.shadowRoot.getElementById('conversationDetail').classList.add('hidden');
+            }
+
+            showLoading() {
+                this.shadowRoot.getElementById('initialState').classList.add('hidden');
+                this.shadowRoot.getElementById('conversationDetail').classList.remove('hidden');
+
+                const content = this.shadowRoot.getElementById('conversationContent');
+                content.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <div class="loading-spinner mb-4"></div>
+                <p class="text-md">${this.languageManager.get('loading')}</p>
+            </div>
+        `;
+            }
+
+            showProjectOverview(projectData) {
+                this.shadowRoot.getElementById('initialState').classList.add('hidden');
+                this.shadowRoot.getElementById('conversationDetail').classList.remove('hidden');
+
+                const content = this.shadowRoot.getElementById('conversationContent');
+
+                // Calculate file count
+                let fileCount = 0;
+                Object.values(projectData.projects).forEach(project => {
+                    fileCount += project.files ? project.files.length : 0;
+                });
+
+                const directoryHandle = this.dataManager.getDirectoryHandle();
+
+                content.innerHTML = `
+            <div class="mb-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-2">${this.languageManager.get('projectOverview')}</h2>
+                <p class="text-gray-600">${this.languageManager.get('projectFolderLabel')}: <span class="font-medium">${directoryHandle.name}</span></p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <div class="bg-blue-100 p-3 rounded-full mr-4">
+                            <span class="text-blue-500">📁</span>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">${this.languageManager.get('projectCount')}</p>
+                            <p class="text-2xl font-bold text-gray-800">${Object.keys(projectData.projects).length}</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <div class="bg-green-100 p-3 rounded-full mr-4">
+                            <span class="text-green-500">📄</span>
+                        </div>
+                        <div>
+                            <p class="text-sm text-gray-500">${this.languageManager.get('jsonlFiles')}</p>
+                            <p class="text-2xl font-bold text-gray-800">${fileCount}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h3 class="text-lg font-semibold text-blue-800 mb-2">${this.languageManager.get('nextStep')}</h3>
+                <p class="text-blue-700">${this.languageManager.get('nextStepDescription')}</p>
+            </div>
+        `;
+            }
+
+            showNoSessions() {
+                this.shadowRoot.getElementById('initialState').classList.add('hidden');
+                this.shadowRoot.getElementById('conversationDetail').classList.remove('hidden');
+
+                const content = this.shadowRoot.getElementById('conversationContent');
+                content.innerHTML = `
+            <div class="text-center text-gray-500 py-8">
+                <span class="text-3xl mb-3">🚫</span>
+                <p class="text-md">${this.languageManager.get('noSessionsFound')}</p>
+                <p class="text-xs mt-1">${this.languageManager.get('noSessionsDescription')}</p>
+            </div>
+        `;
+            }
+
+            showSession(session) {
+                this.shadowRoot.getElementById('initialState').classList.add('hidden');
+                this.shadowRoot.getElementById('conversationDetail').classList.remove('hidden');
+
+                const content = this.shadowRoot.getElementById('conversationContent');
+                content.innerHTML = '';
+
+                if (!session) {
+                    content.innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <span class="text-3xl mb-3">⚠️</span>
+                    <p class="text-md">${this.languageManager.get('invalidSession')}</p>
+                </div>
+            `;
+                    return;
+                }
+
+                // Add session header
+                const header = document.createElement('div');
+                header.className = 'mb-4 pb-3 border-b border-gray-200';
+                header.innerHTML = `
+            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 bg-white border border-gray-200 rounded-lg p-3">
+                <div class="flex items-center">
+                    <span class="mr-1">#</span>
+                    <span class="truncate">${session.id || this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="mr-1">🕐</span>
+                    <span>${session.startTime ? new Date(session.startTime).toLocaleDateString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="mr-1">💬</span>
+                    <span>${this.languageManager.get('messagesCount')}: ${session.messages ? session.messages.length : 0}</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="mr-1">📄</span>
+                    <span class="truncate">${session.fileName || this.languageManager.get('unknownSession')}</span>
+                </div>
+            </div>
+        `;
+                content.appendChild(header);
+
+                // Add messages
+                const messagesContainer = document.createElement('div');
+                messagesContainer.className = 'space-y-3';
+
+                if (!session.messages || session.messages.length === 0) {
+                    messagesContainer.innerHTML = `
+                <div class="text-center text-gray-500 py-4">
+                    <span class="text-2xl mb-2">🚫</span>
+                    <p class="text-sm">${this.languageManager.get('noMessagesInSession')}</p>
+                </div>
+            `;
+                } else {
+                    session.messages.forEach(message => {
+                        const messageElement = this.createMessageElement(message);
+                        messagesContainer.appendChild(messageElement);
+                    });
+                }
+
+                content.appendChild(messagesContainer);
+
+                // Add event listeners for diff buttons
+                setTimeout(() => {
+                    this.attachDiffButtonListeners(content);
+                }, 0);
+            }
+
+            createMessageElement(message) {
+                const messageElement = document.createElement('div');
+
+                if (message.role === 'user') {
+                    messageElement.className = 'message-user p-3 rounded-lg';
+                    messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                    <span class="text-blue-500 mr-2 text-sm">👤</span>
+                    <span class="font-medium text-sm">${this.languageManager.get('user')}</span>
+                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+                ${message.rawData && message.rawData.thinkingMetadata ? `
+                    <div class="mt-1 text-xs text-gray-500">
+                        <span class="mr-1">🧠</span>${this.languageManager.get('thinkingMode')}: ${message.rawData.thinkingMetadata.level || this.languageManager.get('unknownSession')}
+                    </div>
+                ` : ''}
+            `;
+                } else if (message.role === 'summary') {
+                    messageElement.className = 'message-summary p-3 rounded-lg';
+                    messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                    <span class="text-yellow-500 mr-2 text-sm">📝</span>
+                    <span class="font-medium text-sm">${this.languageManager.get('summary')}</span>
+                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+            `;
+                } else if (message.role === 'system') {
+                    messageElement.className = 'message-system p-3 rounded-lg';
+                    messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                    <span class="text-blue-500 mr-2 text-sm">⚙️</span>
+                    <span class="font-medium text-sm">${this.languageManager.get('system')}</span>
+                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+                ${message.rawData && message.rawData.subtype ? `
+                    <div class="mt-1 text-xs text-gray-500">
+                        <span class="mr-1">🏷️</span>${this.languageManager.get('subtype')}: ${message.rawData.subtype}
+                    </div>
+                ` : ''}
+            `;
+                } else if (message.role === 'assistant') {
+                    messageElement.className = 'message-assistant p-3 rounded-lg';
+
+                    let modelInfo = '';
+                    if (message.rawData && message.rawData.message && message.rawData.message.model) {
+                        modelInfo = `<span class="text-xs bg-purple-100 text-purple-800 px-1 py-0.5 rounded ml-1">${message.rawData.message.model}</span>`;
+                    }
+
+                    let contentElements = '';
+                    let hasComplexContent = false;
+
+                    // Check if we have complex content array
+                    if (message.rawData &&
+                        message.rawData.message &&
+                        message.rawData.message.content &&
+                        Array.isArray(message.rawData.message.content)) {
+
+                        hasComplexContent = true;
+                        contentElements = `<div class="mt-2 space-y-3">`;
+                        message.rawData.message.content.forEach(item => {
+                            contentElements += this.renderMessageContentItem(item);
+                        });
+                        contentElements += `</div>`;
+                    }
+
+                    // Handle simple text content
+                    let simpleContent = '';
+                    if (!hasComplexContent && message.content) {
+                        simpleContent = `<div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>`;
+                    }
+
+                    messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                    <span class="text-green-500 mr-2 text-sm">🤖</span>
+                    <span class="font-medium text-sm">${this.languageManager.get('assistant')}</span>
+                    ${modelInfo}
+                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                ${contentElements}
+                ${simpleContent}
+                ${message.rawData && message.rawData.message && message.rawData.message.usage ? `
+                    <div class="mt-1 text-xs text-gray-500 flex space-x-3">
+                        <span><span class="mr-1">📥</span>${this.languageManager.get('inputTokens')}: ${message.rawData.message.usage.input_tokens || 0}</span>
+                        <span><span class="mr-1">📤</span>${this.languageManager.get('outputTokens')}: ${message.rawData.message.usage.output_tokens || 0}</span>
+                    </div>
+                ` : ''}
+            `;
+                } else {
+                    // Handle other message types
+                    messageElement.className = 'message-system p-3 rounded-lg';
+                    messageElement.innerHTML = `
+                <div class="flex items-center mb-1">
+                    <span class="text-yellow-500 mr-2 text-sm">❓</span>
+                    <span class="font-medium text-sm">${message.type || this.languageManager.get('unknownType')}</span>
+                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                </div>
+                <div class="json-code">
+                    <pre>${this.formatJSON(message.rawData || {})}</pre>
+                </div>
+            `;
+                }
+
+                return messageElement;
+            }
+
+            renderMessageContentItem(item) {
+                switch (item.type) {
+                    case 'text':
+                        const textContent = this.convertTodoToHTML(item.text || '');
+                        // Only show "文本内容" label if there are multiple content types
+                        const showLabel = false; // Simplified - no label for cleaner display 
+                        return `
+                    <div class="text-content">
+                        ${showLabel ? '<div class="text-xs text-gray-500 mb-1">' + this.languageManager.get('textContent') + '</div>' : ''}
+                        <div class="text-gray-700 whitespace-pre-wrap text-sm">${textContent}</div>
+                    </div>
+                `;
+
+                    case 'summary':
+                        const summaryContent = item.summary || '';
+                        return `
+                    <div class="summary-content bg-yellow-50 p-3 rounded border border-yellow-200">
+                        <div class="text-xs text-yellow-600 mb-1">${this.languageManager.get('summary')}</div>
+                        <div class="text-gray-700 whitespace-pre-wrap">${summaryContent}</div>
+                    </div>
+                `;
+
+                    case 'system':
+                        const systemContent = item.content || '';
+                        return `
+                    <div class="system-content bg-blue-50 p-3 rounded border border-blue-200">
+                        <div class="text-xs text-blue-600 mb-1">${this.languageManager.get('system')}消息</div>
+                        <div class="text-gray-700 whitespace-pre-wrap">${systemContent}</div>
+                    </div>
+                `;
+
+                    case 'tool_use':
+                        return this.renderToolUseItem(item);
+
+                    case 'tool_result':
+                        return this.renderToolResultItem(item);
+
+                    default:
+                        return `
+                    <div class="unknown-content">
+                        <div class="text-xs text-gray-500 mb-1">${item.type || this.languageManager.get('unknownType')}</div>
+                        <div class="json-code">
+                            <pre>${this.formatJSON(item)}</pre>
+                        </div>
+                    </div>
+                `;
+                }
+            }
+
+            renderToolUseItem(item) {
+                let toolDisplay = '';
+                let comparisonButton = '';
+                let showJsonDisplay = true;
+
+                // Handle local-command-stdout
+                if (item.name === 'local-command-stdout' && item.input && item.input.stdout) {
+                    const cleanedStdout = this.dataManager.removeANSICodes(item.input.stdout);
+                    toolDisplay = `
+                <div class="bg-gray-800 text-white p-3 rounded text-sm font-mono whitespace-pre-wrap overflow-x-auto">
+                    ${cleanedStdout}
+                </div>
+            `;
+                }
+                // Handle TodoWrite
+                else if (item.name === 'TodoWrite' && item.input && item.input.todos) {
+                    const todoHTML = this.renderTodoList(item.input.todos);
+                    toolDisplay = `
+                <div class="todo-container p-3 bg-white rounded border border-gray-200">
+                    ${todoHTML}
+                </div>
+            `;
+                }
+                // Handle MultiEdit and Edit tools
+                else if ((item.name === 'MultiEdit' || item.name === 'Edit') && item.input) {
+                    let editsData = [];
+
+                    if (item.name === 'Edit' && (item.input.old_string || item.input.new_string)) {
+                        editsData.push({
+                            old_string: item.input.old_string || '',
+                            new_string: item.input.new_string || '',
+                            file_path: item.input.file_path || '文件'
+                        });
+                    }
+                    else if (item.name === 'MultiEdit' && item.input.edits && Array.isArray(item.input.edits) && item.input.edits.length > 0) {
+                        item.input.edits.forEach((edit, index) => {
+                            if (edit.old_string || edit.new_string) {
+                                editsData.push({
+                                    old_string: edit.old_string || '',
+                                    new_string: edit.new_string || '',
+                                    file_path: edit.file_path || `编辑 ${index + 1}`
+                                });
+                            }
+                        });
+                    }
+
+                    if (editsData.length > 0) {
+                        const editId = 'edit_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                        this.dataManager.setEditData(editId, {
+                            edits: editsData,
+                            toolName: item.name
+                        });
+
+                        comparisonButton = `
+                    <button class="diff-button ml-2 text-xs" data-edit-id="${editId}">
+                        <span class="mr-1">🔍</span>${this.languageManager.get('compareText')}${editsData.length > 1 ? ` (${editsData.length})` : ''}
+                    </button>
+                `;
+
+                        if (item.name === 'MultiEdit' || item.name === 'Edit') {
+                            showJsonDisplay = false;
+                        }
+                    }
+                }
+
+                // Show JSON for other tools
+                if (showJsonDisplay && item.input && !toolDisplay) {
+                    toolDisplay = `
+                <div class="json-code">
+                    <pre>${this.formatJSON(item.input)}</pre>
+                </div>
+            `;
+                }
+
+                return `
+            <div class="tool-call">
+                <div class="tool-name flex items-center">
+                    <span class="text-purple-500 mr-2">🛠️</span>
+                    ${item.name || this.languageManager.get('unknownTool')}
+                    ${comparisonButton}
+                </div>
+                ${toolDisplay}
+            </div>
+        `;
+            }
+
+            renderToolResultItem(item) {
+                let resultDisplay = '';
+                if (typeof item.content === 'string') {
+                    // For Write tool outputs, display as plain text without HTML escaping
+                    let displayContent = item.content;
+
+                    // Only escape HTML tags for non-Write tool results
+                    const hasHtmlTags = /<[^>]*>/.test(item.content);
+                    if (hasHtmlTags) {
+                        displayContent = item.content.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    }
+
+                    resultDisplay = `
+                <div class="bg-green-50 p-3 rounded border border-green-200">
+                    <div class="text-xs text-green-600 mb-1">${this.languageManager.get('toolResult')}</div>
+                    <div class="text-gray-700 whitespace-pre-wrap">${displayContent}</div>
+                </div>
+            `;
+                } else {
+                    resultDisplay = `
+                <div class="json-code">
+                    <pre>${this.formatJSON(item.content)}</pre>
+                </div>
+            `;
+                }
+
+                return `
+            <div class="tool-result">
+                <div class="tool-name flex items-center text-green-600">
+                    <span class="mr-2">✅</span>
+                    ${this.languageManager.get('toolResult')}
+                </div>
+                ${resultDisplay}
+            </div>
+        `;
+            }
+
+            attachDiffButtonListeners(content) {
+                const diffButtons = content.querySelectorAll('.diff-button');
+                diffButtons.forEach(button => {
+                    button.addEventListener('click', () => {
+                        const editId = button.getAttribute('data-edit-id');
+                        if (editId) {
+                            const editData = this.dataManager.getEditData(editId);
+                            if (editData) {
+                                this.showMultiEditComparison(editData.edits, editData.toolName);
+                            }
+                        }
+                    });
+                });
+            }
+
+            showMultiEditComparison(edits, toolName = '') {
+                // Create modal
+                const modal = document.createElement('div');
+                modal.className = 'diff-modal';
+
+                let modalContent = `
+            <div class="diff-modal-content">
+                <div class="diff-modal-header">
+                    <h3 class="text-lg font-semibold">${this.languageManager.get('textComparison')} - ${toolName} (${edits.length}${this.languageManager.get('editsCount')})</h3>
+                    <button class="diff-button-secondary close-diff-modal">${this.languageManager.get('closeButton')}</button>
+                </div>
+                <div class="diff-edit-tabs">
+        `;
+
+                // Create edit tabs
+                edits.forEach((edit, index) => {
+                    const filePath = edit.file_path || `编辑 ${index + 1}`;
+                    const isActive = index === 0 ? 'active' : '';
+                    modalContent += `
+                <button class="diff-edit-tab ${isActive}" data-edit-index="${index}">${filePath}</button>
+            `;
+                });
+
+                modalContent += `
+                </div>
+                <div class="diff-modal-body">
+                    <div class="diff-content-tabs">
+                        <button class="diff-content-tab active" data-content-tab="original">${this.languageManager.get('originalText')}</button>
+                        <button class="diff-content-tab" data-content-tab="new">${this.languageManager.get('newText')}</button>
+                        <button class="diff-content-tab" data-content-tab="diff">${this.languageManager.get('diffComparison')}</button>
+                    </div>
+                    <div class="diff-content-area">
+                        <div class="diff-panel active" id="original-panel">
+                            <div class="diff-panel-header">${this.languageManager.get('originalText')}</div>
+                            <textarea class="diff-textarea" id="original-textarea" readonly></textarea>
+                        </div>
+                        <div class="diff-panel" id="new-panel">
+                            <div class="diff-panel-header">${this.languageManager.get('newText')}</div>
+                            <textarea class="diff-textarea" id="new-textarea" readonly></textarea>
+                        </div>
+                        <div class="diff-panel" id="diff-panel">
+                            <div class="diff-panel-header">${this.languageManager.get('diffComparison')}</div>
+                            <div class="diff-comparison" id="diff-content"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+                modal.innerHTML = modalContent;
+
+                // Add diff modal styles to the modal itself
+                const styleElement = document.createElement('style');
+                styleElement.textContent = this.styleManager.getDiffModalStyles();
+                modal.appendChild(styleElement);
+
+                document.body.appendChild(modal);
+
+                // Initialize first edit content
+                this.updateEditContent(0, edits, modal);
+
+                // Edit tab switching
+                const editTabs = modal.querySelectorAll('.diff-edit-tab');
+                editTabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const editIndex = parseInt(tab.getAttribute('data-edit-index'));
+                        editTabs.forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        this.updateEditContent(editIndex, edits, modal);
+                    });
+                });
+
+                // Content tab switching
+                const contentTabs = modal.querySelectorAll('.diff-content-tab');
+                contentTabs.forEach(tab => {
+                    tab.addEventListener('click', () => {
+                        const contentTab = tab.getAttribute('data-content-tab');
+                        contentTabs.forEach(t => t.classList.remove('active'));
+                        modal.querySelectorAll('.diff-panel').forEach(p => p.classList.remove('active'));
+                        tab.classList.add('active');
+                        modal.querySelector(`#${contentTab}-panel`).classList.add('active');
+                    });
+                });
+
+                // Close modal
+                const closeBtn = modal.querySelector('.close-diff-modal');
+                closeBtn.addEventListener('click', () => {
+                    document.body.removeChild(modal);
+                });
+
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        document.body.removeChild(modal);
+                    }
+                });
+            }
+
+            updateEditContent(editIndex, edits, modal) {
+                const edit = edits[editIndex];
+                const oldText = edit.old_string || '';
+                const newText = edit.new_string || '';
+
+                modal.querySelector('#original-textarea').value = oldText;
+                modal.querySelector('#new-textarea').value = newText;
+                modal.querySelector('#diff-content').innerHTML = this.calculateTextDiff(oldText, newText);
+            }
+
+            calculateTextDiff(oldText, newText) {
+                if (!oldText && !newText) {
+                    return `<div class="diff-line diff-unchanged">${this.languageManager.get('noTextContent')}</div>`;
+                }
+
+                if (!oldText) {
+                    return `<div class="diff-line diff-added">+ ${this.escapeHTML(newText)}</div>`;
+                }
+
+                if (!newText) {
+                    return `<div class="diff-line diff-removed">- ${this.escapeHTML(oldText)}</div>`;
+                }
+
+                const oldLines = oldText.split('\n');
+                const newLines = newText.split('\n');
+                const maxLength = Math.max(oldLines.length, newLines.length);
+                let diffHTML = '';
+
+                for (let i = 0; i < maxLength; i++) {
+                    const oldLine = oldLines[i] || '';
+                    const newLine = newLines[i] || '';
+
+                    if (oldLine === newLine) {
+                        diffHTML += `<div class="diff-line diff-unchanged">  ${this.escapeHTML(oldLine)}</div>`;
+                    } else {
+                        if (oldLine) {
+                            diffHTML += `<div class="diff-line diff-removed">- ${this.escapeHTML(oldLine)}</div>`;
+                        }
+                        if (newLine) {
+                            diffHTML += `<div class="diff-line diff-added">+ ${this.escapeHTML(newLine)}</div>`;
+                        }
+                    }
+                }
+
+                return diffHTML || `<div class="diff-line diff-unchanged">${this.languageManager.get('noDifference')}</div>`;
+            }
+
+            escapeHTML(text) {
+                if (!text) return '';
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;');
+            }
+
+            convertTodoToHTML(content) {
+                if (!content) return content;
+
+                // Handle string content
+                if (typeof content === 'string') {
+                    try {
+                        // Try to parse JSON todo data
+                        const todoData = JSON.parse(content);
+                        if (todoData && todoData.todos && Array.isArray(todoData.todos)) {
+                            return this.renderTodoList(todoData.todos);
+                        }
+                    } catch (error) {
+                        // Handle old todo node format
+                        const todoRegex = /\[todo\]([^\[]*?)\[\/todo\]/gi;
+                        let result = content;
+
+                        result = result.replace(todoRegex, (match, todoContent) => {
+                            const trimmedContent = todoContent.trim();
+                            if (!trimmedContent) return '';
+
+                            return `<div class="flex items-start mb-1">
+                        <input type="checkbox" class="mt-1 mr-2" disabled>
+                        <span class="text-gray-700">${trimmedContent}</span>
+                    </div>`;
+                        });
+
+                        return result;
+                    }
+                }
+
+                // Handle object todo data
+                if (typeof content === 'object' && content.todos && Array.isArray(content.todos)) {
+                    return this.renderTodoList(content.todos);
+                }
+
+                return content;
+            }
+
+            renderTodoList(todos) {
+                if (!todos || !Array.isArray(todos) || todos.length === 0) {
+                    return '<div class="text-gray-500 text-sm">无待办事项</div>';
+                }
+
+                let todoHTML = '<div class="todo-list space-y-2">';
+
+                todos.forEach(todo => {
+                    const status = todo.status || 'pending';
+                    const todoContent = todo.content || '';
+                    const isCompleted = status === 'completed';
+                    const isInProgress = status === 'in_progress';
+
+                    let statusClass = 'text-gray-700';
+                    let statusIcon = '';
+
+                    if (isCompleted) {
+                        statusClass = 'text-green-600 line-through';
+                        statusIcon = '<span class="text-green-500 mr-2">✅</span>';
+                    } else if (isInProgress) {
+                        statusClass = 'text-blue-600';
+                        statusIcon = '<span class="text-blue-500 mr-2">⏳</span>';
+                    } else {
+                        statusIcon = '<span class="text-gray-400 mr-2">⭕</span>';
+                    }
+
+                    todoHTML += `
+                <div class="flex items-start p-2 bg-white rounded border border-gray-200">
+                    <div class="flex items-center flex-1">
+                        ${statusIcon}
+                        <span class="${statusClass}">${todoContent}</span>
+                    </div>
+                    <span class="text-xs text-gray-500 ml-2 px-2 py-1 bg-gray-100 rounded">${status}</span>
+                </div>
+            `;
+                });
+
+                todoHTML += '</div>';
+                return todoHTML;
+            }
+
+            formatJSON(obj) {
+                try {
+                    return JSON.stringify(obj, null, 2)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"([^"]+)":/g, '<span class="json-key">"$1"</span>:')
+                        .replace(/: "([^"]*)"/g, ': <span class="json-string">"$1"</span>')
+                        .replace(/: (\d+)/g, ': <span class="json-number">$1</span>')
+                        .replace(/: (true|false)/g, ': <span class="json-boolean">$1</span>')
+                        .replace(/: null/g, ': <span class="json-null">null</span>');
+                } catch (error) {
+                    console.error('格式化JSON时出错:', error);
+                    return '无法格式化JSON数据';
+                }
+            }
+
+            updateLanguage() {
+                // Update message viewer UI elements with current language
+                const conversationDetails = this.shadowRoot.querySelector('h2');
+                if (conversationDetails) {
+                    const iconSpan = conversationDetails.querySelector('span');
+                    if (iconSpan) {
+                        conversationDetails.innerHTML = `${iconSpan.outerHTML}${this.languageManager.get('conversationDetails')}`;
+                    } else {
+                        conversationDetails.textContent = this.languageManager.get('conversationDetails');
+                    }
+                }
+
+                // Update initial state text
+                const initialState = this.shadowRoot.getElementById('initialState');
+                if (initialState) {
+                    const title = initialState.querySelector('h3');
+                    const description = initialState.querySelector('p');
+                    if (title) title.textContent = this.languageManager.get('initialStateTitle');
+                    if (description) description.textContent = this.languageManager.get('initialStateDescription');
+                }
+
+                // Update loading text
+                const loadingElements = this.shadowRoot.querySelectorAll('.loading-spinner + p');
+                loadingElements.forEach(element => {
+                    if (element.textContent === this.languageManager.get('loading') ||
+                        element.textContent === '加载中...') {
+                        element.textContent = this.languageManager.get('loading');
+                    }
+                });
+            }
+        }
+
+
+        // Session navigator component
+        class SessionNavigator extends HTMLElement {
+            constructor() {
+                super();
+                this.dataManager = window.dataManager;
+                this.styleManager = window.styleManager || new StyleManager();
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+                this.hide(); // Initially hidden
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+            <style>
+                ${this.styleManager.generateTailwindStyles()}
+                ${this.styleManager.getSessionNavigatorStyles()}
+            </style>
+            <div class="session-navigator hidden" id="sessionNavigator">
+                <div class="session-controls">
+                    <button id="prevSessionBtn" class="session-button" disabled>
+                        <span class="mr-1">◀</span>上一个会话
+                    </button>
+                    <div class="session-info" id="sessionInfo">
+                        会话 0 / 0
+                    </div>
+                    <button id="nextSessionBtn" class="session-button" disabled>
+                        下一个会话 <span class="ml-1">▶</span>
+                    </button>
+                </div>
+            </div>
+        `;
+
+                this.attachEventListeners();
+            }
+
+            attachEventListeners() {
+                const prevBtn = this.shadowRoot.getElementById('prevSessionBtn');
+                const nextBtn = this.shadowRoot.getElementById('nextSessionBtn');
+
+                prevBtn.addEventListener('click', () => this.navigateToPreviousSession());
+                nextBtn.addEventListener('click', () => this.navigateToNextSession());
+            }
+
+            show() {
+                this.shadowRoot.getElementById('sessionNavigator').classList.remove('hidden');
+            }
+
+            hide() {
+                this.shadowRoot.getElementById('sessionNavigator').classList.add('hidden');
+            }
+
+            updateSessionInfo() {
+                const projectData = this.dataManager.getProjectData();
+                const currentIndex = projectData.currentSessionIndex;
+                const totalSessions = projectData.currentFileSessions.length;
+
+                const sessionInfo = this.shadowRoot.getElementById('sessionInfo');
+                const prevBtn = this.shadowRoot.getElementById('prevSessionBtn');
+                const nextBtn = this.shadowRoot.getElementById('nextSessionBtn');
+
+                if (totalSessions === 0) {
+                    this.hide();
+                    return;
+                }
+
+                this.show();
+
+                // Update button states
+                prevBtn.disabled = currentIndex === 0;
+                nextBtn.disabled = currentIndex === totalSessions - 1;
+            }
+
+            navigateToPreviousSession() {
+                const projectData = this.dataManager.getProjectData();
+                const currentIndex = projectData.currentSessionIndex;
+
+                if (currentIndex > 0) {
+                    this.dataManager.setCurrentSessionIndex(currentIndex - 1);
+                    this.showCurrentSession();
+                    this.updateSessionInfo();
+                }
+            }
+
+            navigateToNextSession() {
+                const projectData = this.dataManager.getProjectData();
+                const currentIndex = projectData.currentSessionIndex;
+                const totalSessions = projectData.currentFileSessions.length;
+
+                if (currentIndex < totalSessions - 1) {
+                    this.dataManager.setCurrentSessionIndex(currentIndex + 1);
+                    this.showCurrentSession();
+                    this.updateSessionInfo();
+                }
+            }
+
+            showCurrentSession() {
+                const session = this.dataManager.getCurrentSession();
+                const messageViewer = document.querySelector('message-viewer');
+                if (messageViewer && session) {
+                    messageViewer.showSession(session);
+                }
+            }
+
+            // Public method to update navigation when a file is loaded
+            onFileLoaded() {
+                this.updateSessionInfo();
+            }
+
+            // Public method to reset navigation
+            reset() {
+                this.hide();
+            }
+        }
+
+        // Language manager component
+        class LanguageManager {
+            constructor() {
+                this.currentLanguage = this.detectLanguage();
+                this.translations = {
+                    'zh-CN': {
+                        // App title
+                        'appTitle': 'Claude JSONL 项目历史解析器 - 重构版',
+
+                        // Main app
+                        'projectFolder': '项目文件夹',
+                        'selectFolderPlaceholder': '点击右侧按钮选择项目文件夹',
+                        'selectButton': '选择',
+                        'selectingButton': '选择中...',
+                        'refreshButton': '刷新',
+                        'refreshingButton': '刷新中...',
+                        'expandAllButton': '展开',
+                        'collapseAllButton': '折叠',
+                        'resetButton': '重置',
+                        'browserSupportInfo': '需要现代浏览器支持（Chrome 86+ 或 Edge 86+）',
+
+                        // File browser
+                        'projectStructure': '项目结构',
+                        'noProjectData': '无项目数据',
+                        'unnamedProject': '未命名项目',
+                        'loadingPreview': '加载中...',
+                        'noValidSessions': '无有效会话',
+                        'noUserMessage': '无用户消息',
+                        'noMessageContent': '无消息内容',
+
+                        // Message viewer
+                        'conversationDetails': '对话详情',
+                        'initialStateTitle': '选择项目文件夹开始',
+                        'initialStateDescription': '点击"选择"按钮，然后选择包含Claude对话历史JSONL文件的项目文件夹。',
+                        'loading': '加载中...',
+                        'projectOverview': '项目概览',
+                        'projectFolderLabel': '项目文件夹',
+                        'projectCount': '项目数量',
+                        'jsonlFiles': 'JSONL文件',
+                        'nextStep': '下一步',
+                        'nextStepDescription': '点击左侧项目结构中的JSONL文件查看对话详情。',
+                        'noSessionsFound': '未找到有效会话',
+                        'noSessionsDescription': '此文件中没有找到有效的Claude对话记录',
+                        'invalidSession': '会话数据无效',
+                        'noMessagesInSession': '此会话中没有消息',
+                        'unknownSession': '未知',
+                        'messagesCount': '消息',
+                        'fileName': '文件名',
+
+                        // Message types
+                        'user': '用户',
+                        'assistant': '助手',
+                        'summary': '总结',
+                        'system': '系统',
+                        'unknownType': '未知类型',
+                        'textContent': '文本内容',
+
+                        // Tool related
+                        'thinkingMode': '思考模式',
+                        'subtype': '子类型',
+                        'inputTokens': '输入',
+                        'outputTokens': '输出',
+                        'toolCall': '工具调用',
+                        'toolResult': '工具结果',
+                        'unknownTool': '未知工具',
+                        'compareText': '对比文本',
+
+                        // Text comparison modal
+                        'textComparison': '文本对比',
+                        'editsCount': '个编辑',
+                        'closeButton': '关闭',
+                        'originalText': '原始文本',
+                        'newText': '新文本',
+                        'diffComparison': '差异对比',
+                        'noTextContent': '无文本内容',
+                        'noDifference': '无差异',
+
+                        // Todo related
+                        'noTodos': '无待办事项',
+
+                        // Content extraction
+                        'noContent': '无内容',
+                        'noTextContent': '无文本内容',
+                        'toolCallLabel': '工具调用',
+                        'toolResultLabel': '工具结果',
+                        'unknownTool': '未知',
+                        'commandOutput': '命令输出',
+
+                        // Date formatting
+                        'today': '今天',
+                        'yesterday': '昨天',
+                        'daysAgo': '天前',
+
+                        // Errors and alerts
+                        'folderSelectionError': '选择文件夹时出错',
+                        'refreshError': '刷新时出错',
+                        'directoryAccessExpired': '目录访问权限已失效，请重新选择项目文件夹',
+                        'loadProjectError': '加载项目时出错',
+                        'readFileError': '无法读取文件',
+                        'resetConfirmation': '确定要重置应用吗？这将清除当前选择的文件夹和所有数据。',
+                        'browserNotSupported': '您的浏览器不支持文件系统访问API。请使用Chrome 86+或Edge 86+版本。',
+                        'browserNotSupportedButton': '不支持'
+                    },
+                    'en': {
+                        // App title
+                        'appTitle': 'Claude JSONL Project History Viewer - Refactored',
+
+                        // Main app
+                        'projectFolder': 'Project Folder',
+                        'selectFolderPlaceholder': 'Click the button on the right to select project folder',
+                        'selectButton': 'Select',
+                        'selectingButton': 'Selecting...',
+                        'refreshButton': 'Refresh',
+                        'refreshingButton': 'Refreshing...',
+                        'expandAllButton': 'Expand All',
+                        'collapseAllButton': 'Collapse All',
+                        'resetButton': 'Reset',
+                        'browserSupportInfo': 'Requires modern browser support (Chrome 86+ or Edge 86+)',
+
+                        // File browser
+                        'projectStructure': 'Project Structure',
+                        'noProjectData': 'No project data',
+                        'unnamedProject': 'Unnamed Project',
+                        'loadingPreview': 'Loading...',
+                        'noValidSessions': 'No valid sessions',
+                        'noUserMessage': 'No user message',
+                        'noMessageContent': 'No message content',
+
+                        // Message viewer
+                        'conversationDetails': 'Conversation Details',
+                        'initialStateTitle': 'Select Project Folder to Start',
+                        'initialStateDescription': 'Click the "Select" button, then choose a project folder containing Claude conversation history JSONL files.',
+                        'loading': 'Loading...',
+                        'projectOverview': 'Project Overview',
+                        'projectFolderLabel': 'Project Folder',
+                        'projectCount': 'Project Count',
+                        'jsonlFiles': 'JSONL Files',
+                        'nextStep': 'Next Step',
+                        'nextStepDescription': 'Click on JSONL files in the project structure to view conversation details.',
+                        'noSessionsFound': 'No Valid Sessions Found',
+                        'noSessionsDescription': 'No valid Claude conversation records found in this file',
+                        'invalidSession': 'Invalid Session Data',
+                        'noMessagesInSession': 'No messages in this session',
+                        'unknownSession': 'Unknown',
+                        'messagesCount': 'Messages',
+                        'fileName': 'File Name',
+
+                        // Message types
+                        'user': 'User',
+                        'assistant': 'Assistant',
+                        'summary': 'Summary',
+                        'system': 'System',
+                        'unknownType': 'Unknown Type',
+                        'textContent': 'Text Content',
+
+
+                        // Tool related
+                        'thinkingMode': 'Thinking Mode',
+                        'subtype': 'Subtype',
+                        'inputTokens': 'Input',
+                        'outputTokens': 'Output',
+                        'toolCall': 'Tool Call',
+                        'toolResult': 'Tool Result',
+                        'unknownTool': 'Unknown Tool',
+                        'compareText': 'Compare Text',
+
+                        // Text comparison modal
+                        'textComparison': 'Text Comparison',
+                        'editsCount': 'edits',
+                        'closeButton': 'Close',
+                        'originalText': 'Original Text',
+                        'newText': 'New Text',
+                        'diffComparison': 'Difference Comparison',
+                        'noTextContent': 'No text content',
+                        'noDifference': 'No difference',
+
+                        // Todo related
+                        'noTodos': 'No todos',
+
+                        // Content extraction
+                        'noContent': 'No content',
+                        'noTextContent': 'No text content',
+                        'toolCallLabel': 'Tool Call',
+                        'toolResultLabel': 'Tool Result',
+                        'unknownTool': 'Unknown',
+                        'commandOutput': 'Command Output',
+
+                        // Date formatting
+                        'today': 'Today',
+                        'yesterday': 'Yesterday',
+                        'daysAgo': 'days ago',
+
+                        // Errors and alerts
+                        'folderSelectionError': 'Error selecting folder',
+                        'refreshError': 'Error refreshing',
+                        'directoryAccessExpired': 'Directory access permission has expired, please reselect the project folder',
+                        'loadProjectError': 'Error loading project',
+                        'readFileError': 'Unable to read file',
+                        'resetConfirmation': 'Are you sure you want to reset the application? This will clear the currently selected folder and all data.',
+                        'browserNotSupported': 'Your browser does not support the File System Access API. Please use Chrome 86+ or Edge 86+.',
+                        'browserNotSupportedButton': 'Not Supported'
+                    }
+                };
+            }
+
+            detectLanguage() {
+                const browserLang = navigator.language || navigator.userLanguage;
+                return browserLang.startsWith('zh') ? 'zh-CN' : 'en';
+            }
+
+            get(key) {
+                const translation = this.translations[this.currentLanguage];
+                return translation && translation[key] !== undefined ? translation[key] : key;
+            }
+
+            setLanguage(language) {
+                if (this.translations[language]) {
+                    this.currentLanguage = language;
+                    this.updatePageLanguage();
+                    this.notifyLanguageChange();
+                    return true;
+                }
+                return false;
+            }
+
+            updatePageLanguage() {
+                document.documentElement.lang = this.currentLanguage;
+            }
+
+            notifyLanguageChange() {
+                // Dispatch custom event for components to update
+                const event = new CustomEvent('languageChanged', {
+                    detail: { language: this.currentLanguage }
+                });
+                document.dispatchEvent(event);
+            }
+
+            getCurrentLanguage() {
+                return this.currentLanguage;
+            }
+
+            // Helper method to get all available languages
+            getAvailableLanguages() {
+                return Object.keys(this.translations);
+            }
+        }
+
+        // Initialize managers
+        window.languageManager = new LanguageManager();
+        window.dataManager = new DataManager();
+        window.styleManager = new StyleManager();
+
+        // Register custom elements
+        customElements.define('claude-history-app', ClaudeCodeHistoryApp);
+        customElements.define('file-browser', FileBrowser);
+        customElements.define('message-viewer', MessageViewer);
+        // Session navigator removed - customElements.define('session-navigator', SessionNavigator);
+    </script>
+</body>
+
+</html>
