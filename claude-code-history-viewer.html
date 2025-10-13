@@ -2893,125 +2893,7 @@
                 });
             }
         }
-
-
-        // Session navigator component
-        class SessionNavigator extends HTMLElement {
-            constructor() {
-                super();
-                this.dataManager = window.dataManager;
-                this.styleManager = window.styleManager || new StyleManager();
-                this.attachShadow({ mode: 'open' });
-            }
-
-            connectedCallback() {
-                this.render();
-                this.hide(); // Initially hidden
-            }
-
-            render() {
-                this.shadowRoot.innerHTML = `
-            <style>
-                ${this.styleManager.generateTailwindStyles()}
-                ${this.styleManager.getSessionNavigatorStyles()}
-            </style>
-            <div class="session-navigator hidden" id="sessionNavigator">
-                <div class="session-controls">
-                    <button id="prevSessionBtn" class="session-button" disabled>
-                        <span class="mr-1">◀</span>上一个会话
-                    </button>
-                    <div class="session-info" id="sessionInfo">
-                        会话 0 / 0
-                    </div>
-                    <button id="nextSessionBtn" class="session-button" disabled>
-                        下一个会话 <span class="ml-1">▶</span>
-                    </button>
-                </div>
-            </div>
-        `;
-
-                this.attachEventListeners();
-            }
-
-            attachEventListeners() {
-                const prevBtn = this.shadowRoot.getElementById('prevSessionBtn');
-                const nextBtn = this.shadowRoot.getElementById('nextSessionBtn');
-
-                prevBtn.addEventListener('click', () => this.navigateToPreviousSession());
-                nextBtn.addEventListener('click', () => this.navigateToNextSession());
-            }
-
-            show() {
-                this.shadowRoot.getElementById('sessionNavigator').classList.remove('hidden');
-            }
-
-            hide() {
-                this.shadowRoot.getElementById('sessionNavigator').classList.add('hidden');
-            }
-
-            updateSessionInfo() {
-                const projectData = this.dataManager.getProjectData();
-                const currentIndex = projectData.currentSessionIndex;
-                const totalSessions = projectData.currentFileSessions.length;
-
-                const sessionInfo = this.shadowRoot.getElementById('sessionInfo');
-                const prevBtn = this.shadowRoot.getElementById('prevSessionBtn');
-                const nextBtn = this.shadowRoot.getElementById('nextSessionBtn');
-
-                if (totalSessions === 0) {
-                    this.hide();
-                    return;
-                }
-
-                this.show();
-
-                // Update button states
-                prevBtn.disabled = currentIndex === 0;
-                nextBtn.disabled = currentIndex === totalSessions - 1;
-            }
-
-            navigateToPreviousSession() {
-                const projectData = this.dataManager.getProjectData();
-                const currentIndex = projectData.currentSessionIndex;
-
-                if (currentIndex > 0) {
-                    this.dataManager.setCurrentSessionIndex(currentIndex - 1);
-                    this.showCurrentSession();
-                    this.updateSessionInfo();
-                }
-            }
-
-            navigateToNextSession() {
-                const projectData = this.dataManager.getProjectData();
-                const currentIndex = projectData.currentSessionIndex;
-                const totalSessions = projectData.currentFileSessions.length;
-
-                if (currentIndex < totalSessions - 1) {
-                    this.dataManager.setCurrentSessionIndex(currentIndex + 1);
-                    this.showCurrentSession();
-                    this.updateSessionInfo();
-                }
-            }
-
-            showCurrentSession() {
-                const session = this.dataManager.getCurrentSession();
-                const messageViewer = document.querySelector('message-viewer');
-                if (messageViewer && session) {
-                    messageViewer.showSession(session);
-                }
-            }
-
-            // Public method to update navigation when a file is loaded
-            onFileLoaded() {
-                this.updateSessionInfo();
-            }
-
-            // Public method to reset navigation
-            reset() {
-                this.hide();
-            }
-        }
-
+ 
         // Language manager component
         class LanguageManager {
             constructor() {
@@ -3268,7 +3150,6 @@
         customElements.define('claude-history-app', ClaudeCodeHistoryApp);
         customElements.define('file-browser', FileBrowser);
         customElements.define('message-viewer', MessageViewer);
-        // Session navigator removed - customElements.define('session-navigator', SessionNavigator);
     </script>
 </body>
 
