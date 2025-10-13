@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title id="appTitle">Claude JSONL 项目历史解析器 - 重构版</title>
+    <title id="appTitle">Claude JSONL 项目历史解析器</title>
     <style>
         * {
             margin: 0;
@@ -167,7 +167,11 @@
             async handleBrowse() {
                 try {
                     const browseBtn = this.shadowRoot.getElementById('browseBtn');
-                    browseBtn.innerHTML = `<span class="mr-1">⏳</span>${this.languageManager.get('selectingButton')}`;
+                    const browseBtnIcon = browseBtn.querySelector('.mr-1');
+                    const browseBtnText = this.shadowRoot.getElementById('browseBtnText');
+
+                    browseBtnIcon.textContent = '⏳';
+                    browseBtnText.textContent = this.languageManager.get('selectingButton');
                     browseBtn.disabled = true;
 
                     const directoryHandle = await window.showDirectoryPicker();
@@ -176,7 +180,8 @@
                     this.shadowRoot.getElementById('folderPath').value = directoryHandle.name;
                     await this.loadProject();
 
-                    browseBtn.innerHTML = `<span class="mr-1">📁</span>${this.languageManager.get('selectButton')}`;
+                    browseBtnIcon.textContent = '📁';
+                    browseBtnText.textContent = this.languageManager.get('selectButton');
                     browseBtn.disabled = false;
                 } catch (error) {
                     console.error('选择文件夹时出错:', error);
@@ -185,16 +190,25 @@
                     }
 
                     const browseBtn = this.shadowRoot.getElementById('browseBtn');
-                    browseBtn.innerHTML = `<span class="mr-1">📁</span>${this.languageManager.get('selectButton')}`;
+                    const browseBtnIcon = browseBtn.querySelector('.mr-1');
+                    const browseBtnText = this.shadowRoot.getElementById('browseBtnText');
+
+                    browseBtnIcon.textContent = '📁';
+                    browseBtnText.textContent = this.languageManager.get('selectButton');
                     browseBtn.disabled = false;
                 }
             }
 
             async handleRefresh() {
                 const refreshBtn = this.shadowRoot.getElementById('refreshBtn');
-                const originalText = refreshBtn.innerHTML;
+                const refreshBtnIcon = refreshBtn.querySelector('.mr-1');
+                const refreshBtnText = this.shadowRoot.getElementById('refreshBtnText');
 
-                refreshBtn.innerHTML = `<span class="mr-1">⏳</span>${this.languageManager.get('refreshingButton')}`;
+                const originalIcon = refreshBtnIcon.textContent;
+                const originalText = refreshBtnText.textContent;
+
+                refreshBtnIcon.textContent = '⏳';
+                refreshBtnText.textContent = this.languageManager.get('refreshingButton');
                 refreshBtn.disabled = true;
 
                 try {
@@ -214,7 +228,8 @@
                     console.error('handleRefresh error:', error);
                     alert(`${this.languageManager.get('refreshError')}: ${error.message}`);
                 } finally {
-                    refreshBtn.innerHTML = originalText;
+                    refreshBtnIcon.textContent = originalIcon;
+                    refreshBtnText.textContent = originalText;
                     refreshBtn.disabled = false;
                 }
             }
@@ -336,8 +351,12 @@
 
             showBrowserNotSupported() {
                 const browseBtn = this.shadowRoot.getElementById('browseBtn');
+                const browseBtnIcon = browseBtn.querySelector('.mr-1');
+                const browseBtnText = this.shadowRoot.getElementById('browseBtnText');
+
                 browseBtn.disabled = true;
-                browseBtn.innerHTML = `<span class="mr-1">⚠️</span>${this.languageManager.get('browserNotSupportedButton')}`;
+                browseBtnIcon.textContent = '⚠️';
+                browseBtnText.textContent = this.languageManager.get('browserNotSupportedButton');
                 alert(this.languageManager.get('browserNotSupported'));
             }
         }
@@ -3000,7 +3019,7 @@
                 this.translations = {
                     'zh-CN': {
                         // App title
-                        'appTitle': 'Claude JSONL 项目历史解析器 - 重构版',
+                        'appTitle': 'Claude JSONL 项目历史解析器',
 
                         // Main app
                         'projectFolder': '项目文件夹',
@@ -3098,7 +3117,7 @@
                     },
                     'en': {
                         // App title
-                        'appTitle': 'Claude JSONL Project History Viewer - Refactored',
+                        'appTitle': 'Claude JSONL Project History Viewer',
 
                         // Main app
                         'projectFolder': 'Project Folder',
