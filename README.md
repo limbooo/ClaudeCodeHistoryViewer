@@ -31,6 +31,10 @@ A single-file web application for browsing Claude Code conversation histories. T
 2. **Select directory**: Click "Select" button to choose project folder containing Claude JSONL files
 3. **Browse conversations**: Click JSONL files in left file tree to view conversation details
 
+### Interface Preview
+
+![Application Interface Screenshot](sample.png)
+
 ### Browser Requirements
 - **Chrome 86+** or **Edge 86+** (recommended)
 - Requires File System Access API support
