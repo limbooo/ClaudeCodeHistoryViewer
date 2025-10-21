@@ -16,7 +16,6 @@
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
             background-color: #f9fafb;
             min-height: 100vh;
-            padding: 1rem;
         }
     </style>
 </head>
@@ -36,9 +35,17 @@
             }
 
             connectedCallback() {
+                // Initialize theme before rendering
+                this.styleManager.initializeTheme();
+
                 this.render();
                 this.attachEventListeners();
                 this.loadInitialState();
+
+                // Apply initial theme to shadow DOM
+                const currentTheme = this.styleManager.getCurrentTheme();
+                const themeInfo = this.styleManager.getThemeManager().getThemeInfo();
+                this.handleThemeChanged({ theme: currentTheme, colors: themeInfo.colors });
             }
 
             render() {
@@ -50,22 +57,27 @@
             <div class="claude-app-container flex flex-col lg:flex-row gap-6">
                 <!-- Left Panel -->
                 <div class="claude-left-panel lg:w-2/5 flex flex-col gap-4">
-                    <div class="bg-white rounded-xl shadow-md p-4">
+                    <div class="rounded-xl shadow-md p-4" style="background-color: var(--bg-primary); box-shadow: var(--shadow-color) 0 4px 6px -1px, var(--shadow-color) 0 2px 4px -1px;">
                         <div class="flex justify-between items-center mb-3">
-                            <h2 class="text-lg font-semibold text-gray-800 flex items-center">
-                                <span class="text-blue-500 mr-2">📁</span>
+                            <h2 class="text-lg font-semibold flex items-center" style="color: var(--text-primary);">
+                                <span class="mr-2" style="color: var(--button-primary);">📁</span>
                                 <span id="projectFolderTitle">${this.languageManager.get('projectFolder')}</span>
                             </h2>
-                            <button id="languageToggle" class="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0 flex items-center">
-                                <span class="mr-1">🌐</span>
-                                <span id="languageToggleText">${this.languageManager.getCurrentLanguage() === 'zh-CN' ? '中文' : 'English'}</span>
-                            </button>
+                            <div class="flex space-x-2">
+                                <button id="themeToggle" class="px-3 py-2 rounded text-sm transition-colors border-0 flex items-center hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
+                                    <span class="mr-1" id="themeToggleIcon">${this.styleManager.getThemeManager().getThemeInfo().icon}</span> 
+                                </button>
+                                <button id="languageToggle" class="px-3 py-2 rounded text-sm transition-colors border-0 flex items-center hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
+                                    <span class="mr-1">🌐</span>
+                                    <span id="languageToggleText">${this.languageManager.getCurrentLanguage() === 'zh-CN' ? '中文' : 'English'}</span>
+                                </button>
+                            </div>
                         </div>
                         <div class="flex mb-3">
                             <input type="text" id="folderPath" placeholder="${this.languageManager.get('selectFolderPlaceholder')}" readonly
-                                class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-l-lg bg-gray-50">
+                                class="flex-1 px-3 py-2 text-sm border rounded-l-lg" style="background-color: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-primary);">
                             <button id="browseBtn"
-                                class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded-r-lg transition-colors text-sm border-0">
+                                class="px-3 py-2 rounded-r-lg transition-colors text-sm border-0 hover-scale" style="background-color: var(--button-primary); color: var(--text-inverse);">
                                 <span class="mr-1">📁</span>
                                 <span id="browseBtnText">${this.languageManager.get('selectButton')}</span>
                             </button>
@@ -74,28 +86,28 @@
                         <!-- Option buttons -->
                         <div class="flex space-x-2">
                             <button id="refreshBtn"
-                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                class="flex-1 px-3 py-2 rounded text-sm transition-colors border-0 hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
                                 <span class="mr-1">🔄</span>
                                 <span id="refreshBtnText">${this.languageManager.get('refreshButton')}</span>
                             </button>
                             <button id="expandAllBtn"
-                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                class="flex-1 px-3 py-2 rounded text-sm transition-colors border-0 hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
                                 <span class="mr-1">⬇️</span>
                                 <span id="expandAllBtnText">${this.languageManager.get('expandAllButton')}</span>
                             </button>
                             <button id="collapseAllBtn"
-                                class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                class="flex-1 px-3 py-2 rounded text-sm transition-colors border-0 hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
                                 <span class="mr-1">⬆️</span>
                                 <span id="collapseAllBtnText">${this.languageManager.get('collapseAllButton')}</span>
                             </button>
                             <button id="resetBtn"
-                                class="flex-1 bg-red-100 hover:bg-red-200 text-red-800 px-3 py-2 rounded text-sm transition-colors border-0">
+                                class="flex-1 px-3 py-2 rounded text-sm transition-colors border-0 hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
                                 <span class="mr-1">↩️</span>
                                 <span id="resetBtnText">${this.languageManager.get('resetButton')}</span>
                             </button>
                         </div>
 
-                        <div class="mt-2 text-xs text-gray-500">
+                        <div class="mt-2 text-xs" style="color: var(--text-quaternary);">
                             <p><span class="mr-1">ℹ️</span>${this.languageManager.get('browserSupportInfo')}</p>
                         </div>
                     </div>
@@ -108,9 +120,6 @@
                 <div class="claude-right-panel lg:w-3/5">
                     <!-- Message Viewer Component -->
                     <message-viewer></message-viewer>
-
-                    <!-- Session Navigator Component -->
-                    <session-navigator></session-navigator>
                 </div>
             </div>
         `;
@@ -123,6 +132,7 @@
                 const collapseBtn = this.shadowRoot.getElementById('collapseAllBtn');
                 const resetBtn = this.shadowRoot.getElementById('resetBtn');
                 const languageToggle = this.shadowRoot.getElementById('languageToggle');
+                const themeToggle = this.shadowRoot.getElementById('themeToggle');
 
                 browseBtn.addEventListener('click', () => this.handleBrowse());
                 refreshBtn.addEventListener('click', () => this.handleRefresh());
@@ -130,10 +140,16 @@
                 collapseBtn.addEventListener('click', () => this.handleCollapseAll());
                 resetBtn.addEventListener('click', () => this.handleReset());
                 languageToggle.addEventListener('click', () => this.handleLanguageToggle());
+                themeToggle.addEventListener('click', () => this.handleThemeToggle());
 
                 // Listen for language change events
                 document.addEventListener('languageChanged', () => {
                     this.updateUI();
+                });
+
+                // Listen for theme change events
+                document.addEventListener('themeChanged', (event) => {
+                    this.handleThemeChanged(event.detail);
                 });
 
                 // Check browser support
@@ -314,6 +330,62 @@
                 this.languageManager.setLanguage(newLang);
             }
 
+            handleThemeToggle() {
+                const newTheme = this.styleManager.toggleTheme();
+                console.log('Theme toggled to:', newTheme);
+            }
+
+            handleThemeChanged(themeDetails) {
+                // Update theme toggle button
+                const themeToggleIcon = this.shadowRoot.getElementById('themeToggleIcon');
+
+                if (themeToggleIcon) {
+                    const themeInfo = this.styleManager.getThemeManager().getThemeInfo();
+                    themeToggleIcon.textContent = themeInfo.icon;
+                }
+
+                // Update CSS variables in shadow DOM
+                this.updateThemeVariables(themeDetails.colors);
+            }
+
+            updateThemeVariables(colors) {
+                const style = document.createElement('style');
+                style.textContent = `
+                    :host {
+                        --bg-primary: ${colors.bg.primary};
+                        --bg-secondary: ${colors.bg.secondary};
+                        --bg-tertiary: ${colors.bg.tertiary};
+                        --bg-quaternary: ${colors.bg.quaternary};
+
+                        --text-primary: ${colors.text.primary};
+                        --text-secondary: ${colors.text.secondary};
+                        --text-tertiary: ${colors.text.tertiary};
+                        --text-quaternary: ${colors.text.quaternary};
+                        --text-inverse: ${colors.text.inverse};
+
+                        --border-primary: ${colors.border.primary};
+                        --border-secondary: ${colors.border.secondary};
+                        --border-tertiary: ${colors.border.tertiary};
+
+                        --button-primary: ${colors.button.primary};
+                        --button-primary-hover: ${colors.button.primaryHover};
+                        --button-secondary: ${colors.button.secondary};
+                        --button-secondary-hover: ${colors.button.secondaryHover};
+
+                        --shadow-color: ${colors.bg.primary === '#ffffff' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.3)'};
+                    }
+                `;
+
+                // Remove old theme style if exists
+                const oldStyle = this.shadowRoot.getElementById('theme-style');
+                if (oldStyle) {
+                    oldStyle.remove();
+                }
+
+                style.id = 'theme-style';
+                this.shadowRoot.appendChild(style);
+            }
+
             updateUI() {
                 // Update page title
                 document.title = this.languageManager.get('appTitle');
@@ -363,19 +435,170 @@
 
 
 
+        // Theme management component
+        class ThemeManager {
+            constructor() {
+                this.currentTheme = localStorage.getItem('claude-viewer-theme') || 'light';
+                this.themes = {
+                    light: {
+                        name: 'Light',
+                        icon: '☀️',
+                        colors: {
+                            bg: {
+                                primary: '#ffffff',
+                                secondary: '#f9fafb',
+                                tertiary: '#f3f4f6',
+                                quaternary: '#e5e7eb'
+                            },
+                            text: {
+                                primary: '#111827',
+                                secondary: '#374151',
+                                tertiary: '#6b7280',
+                                quaternary: '#9ca3af',
+                                inverse: '#ffffff'
+                            },
+                            border: {
+                                primary: '#e5e7eb',
+                                secondary: '#d1d5db',
+                                tertiary: '#9ca3af'
+                            },
+                            button: {
+                                primary: '#3b82f6',
+                                primaryHover: '#2563eb',
+                                secondary: '#f3f4f6',
+                                secondaryHover: '#e5e7eb'
+                            }
+                        }
+                    },
+                    dark: {
+                        name: 'Dark',
+                        icon: '🌙',
+                        colors: {
+                            bg: {
+                                primary: '#1f2937',
+                                secondary: '#111827',
+                                tertiary: '#374151',
+                                quaternary: '#4b5563'
+                            },
+                            text: {
+                                primary: '#f9fafb',
+                                secondary: '#e5e7eb',
+                                tertiary: '#d1d5db',
+                                quaternary: '#9ca3af',
+                                inverse: '#111827'
+                            },
+                            border: {
+                                primary: '#374151',
+                                secondary: '#4b5563',
+                                tertiary: '#6b7280'
+                            },
+                            button: {
+                                primary: '#3b82f6',
+                                primaryHover: '#60a5fa',
+                                secondary: '#374151',
+                                secondaryHover: '#4b5563'
+                            }
+                        }
+                    }
+                };
+            }
+
+            getCurrentTheme() {
+                return this.currentTheme;
+            }
+
+            setTheme(theme) {
+                if (this.themes[theme]) {
+                    this.currentTheme = theme;
+                    localStorage.setItem('claude-viewer-theme', theme);
+                    document.documentElement.setAttribute('data-theme', theme);
+
+                    // Dispatch theme change event
+                    document.dispatchEvent(new CustomEvent('themeChanged', {
+                        detail: { theme, colors: this.themes[theme].colors }
+                    }));
+                }
+            }
+
+            toggleTheme() {
+                const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+                this.setTheme(newTheme);
+                return newTheme;
+            }
+
+            getColors() {
+                return this.themes[this.currentTheme].colors;
+            }
+
+            getThemeInfo() {
+                return this.themes[this.currentTheme];
+            }
+
+            // Generate dynamic CSS variables based on current theme
+            generateThemeCSS() {
+                const colors = this.getColors();
+                return `
+                    :root {
+                        --bg-primary: ${colors.bg.primary};
+                        --bg-secondary: ${colors.bg.secondary};
+                        --bg-tertiary: ${colors.bg.tertiary};
+                        --bg-quaternary: ${colors.bg.quaternary};
+
+                        --text-primary: ${colors.text.primary};
+                        --text-secondary: ${colors.text.secondary};
+                        --text-tertiary: ${colors.text.tertiary};
+                        --text-quaternary: ${colors.text.quaternary};
+                        --text-inverse: ${colors.text.inverse};
+
+                        --border-primary: ${colors.border.primary};
+                        --border-secondary: ${colors.border.secondary};
+                        --border-tertiary: ${colors.border.tertiary};
+
+                        --button-primary: ${colors.button.primary};
+                        --button-primary-hover: ${colors.button.primaryHover};
+                        --button-secondary: ${colors.button.secondary};
+                        --button-secondary-hover: ${colors.button.secondaryHover};
+
+                        --shadow-color: rgba(0, 0, 0, 0.1);
+                        --transition-duration: 300ms;
+                    }
+
+                    [data-theme="dark"] {
+                        --shadow-color: rgba(0, 0, 0, 0.3);
+                    }
+
+                    /* Smooth transitions for theme switching */
+                    * {
+                        transition: background-color var(--transition-duration) ease,
+                                    color var(--transition-duration) ease,
+                                    border-color var(--transition-duration) ease,
+                                    box-shadow var(--transition-duration) ease;
+                    }
+
+                    /* Prevent transitions on initial load */
+                    .no-transition * {
+                        transition: none !important;
+                    }
+                `;
+            }
+        }
+
         // Central style management component
         class StyleManager {
             constructor() {
+                this.themeManager = new ThemeManager();
                 this.styles = {
                     app: this.generateAppStyles(),
                     fileBrowser: this.generateFileBrowserStyles(),
                     messageViewer: this.generateMessageViewerStyles(),
-                    sessionNavigator: this.generateSessionNavigatorStyles()
                 };
             }
 
             generateTailwindStyles() {
                 return `
+                /* Theme CSS Variables */
+                ${this.themeManager.generateThemeCSS()}
+
                 /* Tailwind CSS styles */
                 * { box-sizing: border-box; }
 
@@ -663,19 +886,39 @@
 
             generateAppStyles() {
                 return `
+            html, body {
+                background-color: var(--bg-secondary);
+                color: var(--text-primary);
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                width: 100%;
+                overflow: hidden;
+                transition: background-color var(--transition-duration) ease,
+                           color var(--transition-duration) ease;
+            }
+
             .claude-app-container {
-                height: calc(100vh - 2rem);
+                height: 100vh;
+                width: 100vw;
+                background-color: var(--bg-secondary);
+                color: var(--text-primary);
+                padding: 1rem;
+                overflow: hidden;
             }
 
             .claude-left-panel {
-                height: 100%;
-                overflow-y: hidden;
+                height: calc(100vh - 2rem);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }
 
             .claude-right-panel {
-                height: 100%;
-                overflow-y: auto; 
-                scrollbar-color: #cbd5e1 #f8fafc;
+                height: calc(100vh - 2rem);
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
             }
 
             .claude-right-panel::-webkit-scrollbar {
@@ -683,12 +926,12 @@
             }
 
             .claude-right-panel::-webkit-scrollbar-track {
-                background: #f8fafc;
+                background: var(--bg-secondary);
                 border-radius: 4px;
             }
 
             .claude-right-panel::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
+                background: var(--border-tertiary);
                 border-radius: 4px;
             }
 
@@ -696,10 +939,52 @@
                 background: #94a3b8;
             }
 
+            /* Responsive adjustments */
+            @media (max-width: 768px) {
+                .claude-app-container {
+                    padding: 0.5rem;
+                }
+
+                .claude-left-panel,
+                .claude-right-panel {
+                    height: calc(100vh - 1rem);
+                }
+            }
+
+            @media (max-width: 640px) {
+                .claude-app-container {
+                    padding: 0.25rem;
+                }
+
+                .claude-left-panel,
+                .claude-right-panel {
+                    height: calc(100vh - 0.5rem);
+                }
+            }
+
+            /* Hover styles for buttons */
+            .hover-scale:hover {
+                transform: scale(1.02);
+                box-shadow: var(--shadow-color) 0 4px 6px -1px, var(--shadow-color) 0 2px 4px -1px;
+            }
+
+            button[style*="background-color: var(--button-secondary)"]:hover {
+                background-color: var(--button-secondary-hover) !important;
+            }
+
+            button[style*="background-color: var(--button-primary)"]:hover {
+                background-color: var(--button-primary-hover) !important;
+            }
+
+            button[style*="background-color: #dc2626"]:hover {
+                background-color: #b91c1c !important;
+            }
+
             /* Ensure message viewer has proper height */
             message-viewer {
                 display: block;
                 height: 100%;
+                flex: 1;
             }
 
             #conversationDetail {
@@ -716,11 +1001,59 @@
 
             generateFileBrowserStyles() {
                 return `
+            .claude-file-browser-container {
+                background-color: var(--bg-primary);
+                border: 1px solid var(--border-primary);
+                border-radius: 0.75rem;
+                box-shadow: var(--shadow-color) 0 4px 6px -1px, var(--shadow-color) 0 2px 4px -1px;
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                min-height: calc(100vh - 17rem);
+                overflow-y: auto; 
+                scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+                height: 100%;
+                max-height: calc(100vh - 17rem);
+            }
+
+            .claude-file-browser-container::-webkit-scrollbar {
+                width: 14px;
+            }
+
+            .claude-file-browser-container::-webkit-scrollbar-track {
+                background: transparent;
+                border-radius: 4px;
+            }
+
+            .claude-file-browser-container::-webkit-scrollbar-thumb {
+                background: rgba(156, 163, 175, 0.3);
+                border-radius: 4px;
+                transition: background-color 0.2s ease;
+            }
+
+            .claude-file-browser-container::-webkit-scrollbar-thumb:hover {
+                background: rgba(156, 163, 175, 0.5);
+            }
+
+            [data-theme="dark"] .claude-file-browser-container::-webkit-scrollbar-thumb {
+                background: rgba(107, 114, 128, 0.4);
+            }
+
+            [data-theme="dark"] .claude-file-browser-container::-webkit-scrollbar-thumb:hover {
+                background: rgba(107, 114, 128, 0.6);
+            }
+
             .claude-file-tree {
                 overflow-y: auto;
-                max-height: calc(100vh - 380px);
-                min-height: 200px; 
-                scrollbar-color: #cbd5e1 #f8fafc;
+                overflow-x: hidden;
+                flex: 1;
+                min-height: 0;
+                max-height: 100%;
+                background-color: var(--bg-primary);
+                border-radius: 0.75rem;
+                padding: 0.75rem; 
+                scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
+                height: 100%;
             }
 
             .claude-file-tree::-webkit-scrollbar {
@@ -728,19 +1061,29 @@
             }
 
             .claude-file-tree::-webkit-scrollbar-track {
-                background: #f8fafc;
-                border-radius: 4px;
+                background: transparent;
+                border-radius: 3px;
             }
 
             .claude-file-tree::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
-                border-radius: 4px;
+                background: rgba(156, 163, 175, 0.3);
+                border-radius: 3px;
+                transition: background-color 0.2s ease;
             }
 
             .claude-file-tree::-webkit-scrollbar-thumb:hover {
-                background: #94a3b8;
+                background: rgba(156, 163, 175, 0.5);
             }
 
+            [data-theme="dark"] .claude-file-tree::-webkit-scrollbar-thumb {
+                background: rgba(107, 114, 128, 0.4);
+            }
+
+            [data-theme="dark"] .claude-file-tree::-webkit-scrollbar-thumb:hover {
+                background: rgba(107, 114, 128, 0.6);
+            }
+
+      
             .claude-tree-node {
                 position: relative;
             }
@@ -759,23 +1102,223 @@
                 margin-right: 4px;
                 border-radius: 2px;
                 transition: all 0.2s;
+                color: var(--text-secondary);
             }
 
             .claude-tree-toggle:hover {
-                background-color: #e5e7eb;
+                background-color: var(--bg-tertiary);
+                color: var(--text-primary);
             }
 
             .claude-file-item {
-                transition: all 0.2s ease;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                color: var(--text-primary);
+                border-radius: 0.5rem;
+                padding: 0.5rem 0.625rem;
+                margin: 0.125rem 0;
+                border: 1px solid transparent;
+                position: relative;
+                cursor: pointer;
             }
 
             .claude-file-item:hover {
-                background-color: #f9fafb;
+                background-color: var(--bg-tertiary);
+                border-color: rgba(59, 130, 246, 0.1);
+                transform: translateX(1px);
+            }
+
+            .claude-file-item:active {
+                transform: translateX(0) scale(0.98);
+            }
+
+            /* Improve folder icon visibility */
+            .claude-file-item .folder-icon {
+                transition: all 0.25s ease;
+            }
+
+            .claude-active-file .folder-icon {
+                color: #ffffff !important;
+                filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+            }
+
+            /* Ensure text readability in active state */
+            .claude-active-file {
+                color: #ffffff !important;
+            }
+
+            .claude-active-file > div:first-child {
+                color: #ffffff !important;
+            }
+
+            .claude-active-file .file-icon,
+            .claude-active-file .folder-icon {
+                color: #ffffff !important;
+                filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.2));
+            }
+
+            .claude-active-file .font-medium {
+                color: #ffffff !important;
+                font-weight: 600 !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            }
+
+            .claude-active-file .claude-file-preview {
+                color: rgba(255, 255, 255, 0.9) !important;
+                font-weight: 400 !important;
+            }
+
+            /* For project elements */
+            .claude-file-item.claude-active-file .text-sm {
+                color: #ffffff !important;
+                font-weight: 500 !important;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+            }
+
+            /* Force override inline styles for project names */
+            .claude-file-item.claude-active-file .text-sm[style*="color: var(--text-primary)"] {
+                color: #ffffff !important;
+            }
+
+            [data-theme="light"] .claude-file-item.claude-active-file .text-sm[style*="color: var(--text-primary)"] {
+                color: #ffffff !important;
+            }
+
+            [data-theme="dark"] .claude-file-item.claude-active-file .text-sm[style*="color: var(--text-primary)"] {
+                color: #ffffff !important;
+            }
+
+            /* Override file date inline styles */
+            .claude-active-file .font-medium[style*="color: var(--text-secondary)"] {
+                color: #ffffff !important;
+            }
+
+            /* Global override for any text inside active file items */
+            .claude-active-file * {
+                color: #ffffff !important;
+            }
+
+            /* But restore preview text opacity */
+            .claude-active-file .claude-file-preview {
+                color: rgba(255, 255, 255, 0.9) !important;
+            }
+
+            /* Make sure icons are visible */
+            .claude-active-file .file-icon,
+            .claude-active-file .folder-icon {
+                color: #ffffff !important;
+                filter: brightness(1.2) drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+            }
+
+            /* Responsive adjustments */
+            @media (max-width: 768px) {
+                .claude-file-item {
+                    padding: 0.4375rem 0.5rem;
+                    margin: 0.0625rem 0;
+                }
+
+                .claude-active-file::before {
+                    left: -6px;
+                    width: 3px;
+                    height: 16px;
+                }
+
+                .claude-active-file {
+                    transform: translateX(1px);
+                }
+
+                .claude-active-file:hover {
+                    transform: translateX(2px);
+                }
+            }
+
+            /* Focus styles for accessibility */
+            .claude-file-item:focus-visible {
+                outline: 2px solid #3b82f6;
+                outline-offset: 2px;
+                border-radius: 0.5rem;
+            }
+
+            [data-theme="dark"] .claude-file-item:focus-visible {
+                outline-color: #60a5fa;
+            }
+
+            /* Add subtle animation for selection changes */
+            @keyframes file-select {
+                0% {
+                    transform: translateX(0) scale(1);
+                }
+                50% {
+                    transform: translateX(3px) scale(1.02);
+                }
+                100% {
+                    transform: translateX(2px) scale(1);
+                }
+            }
+
+            .claude-file-item.claude-active-file {
+                animation: file-select 0.3s ease-out;
+            }
+
+            /* Improve contrast for light theme */
+            [data-theme="light"] .claude-active-file {
+                background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+                border-color: #1e40af;
+                box-shadow: 0 3px 10px rgba(37, 99, 235, 0.35), 0 1px 3px rgba(0, 0, 0, 0.12);
+            }
+
+            [data-theme="light"] .claude-active-file::before {
+                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+                box-shadow: 0 2px 6px rgba(30, 64, 175, 0.4);
+            }
+
+            [data-theme="light"] .claude-active-file:hover {
+                background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+                box-shadow: 0 5px 15px rgba(30, 64, 175, 0.4), 0 2px 4px rgba(0, 0, 0, 0.15);
             }
 
             .claude-active-file {
-                background-color: #eff6ff;
+                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                color: #ffffff;
+                border: 1px solid #2563eb;
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3), 0 1px 3px rgba(0, 0, 0, 0.1);
+                position: relative;
+                font-weight: 500;
+                transform: translateX(2px);
+            }
+
+            .claude-active-file::before {
+                content: '';
+                position: absolute;
+                left: -8px;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 4px;
+                height: 20px;
+                background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+                border-radius: 0 2px 2px 0;
+                box-shadow: 0 2px 4px rgba(59, 130, 246, 0.4);
+            }
+
+            .claude-active-file:hover {
+                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4), 0 2px 4px rgba(0, 0, 0, 0.15);
+                transform: translateX(3px);
+            }
+
+            [data-theme="dark"] .claude-active-file {
+                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
                 border-color: #3b82f6;
+                box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4), 0 1px 3px rgba(0, 0, 0, 0.3);
+            }
+
+            [data-theme="dark"] .claude-active-file::before {
+                background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+                box-shadow: 0 2px 4px rgba(96, 165, 250, 0.5);
+            }
+
+            [data-theme="dark"] .claude-active-file:hover {
+                background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+                box-shadow: 0 4px 12px rgba(37, 99, 235, 0.5), 0 2px 4px rgba(0, 0, 0, 0.4);
             }
 
             .claude-file-preview {
@@ -785,11 +1328,14 @@
                 -webkit-box-orient: vertical;
                 -webkit-line-clamp: 3;
                 line-clamp: 3;
+                color: var(--text-tertiary);
+                font-size: 0.75rem;
+                line-height: 1.2rem;
             }
 
             .claude-loading-spinner {
-                border: 3px solid #f3f3f3;
-                border-top: 3px solid #3b82f6;
+                border: 3px solid var(--bg-tertiary);
+                border-top: 3px solid var(--button-primary);
                 border-radius: 50%;
                 width: 30px;
                 height: 30px;
@@ -798,13 +1344,29 @@
             }
 
             .loading-spinner {
-                border: 3px solid #f3f3f3;
-                border-top: 3px solid #3b82f6;
+                border: 3px solid var(--bg-tertiary);
+                border-top: 3px solid var(--button-primary);
                 border-radius: 50%;
                 width: 30px;
                 height: 30px;
                 animation: claude-spin 1s linear infinite;
                 margin: 0 auto;
+            }
+
+            .empty-state {
+                text-align: center;
+                color: var(--text-tertiary);
+                padding: 2rem 1rem;
+            }
+
+            .file-icon {
+                color: var(--text-secondary);
+                margin-right: 0.5rem;
+            }
+
+            .folder-icon {
+                color: var(--button-primary);
+                margin-right: 0.5rem;
             }
 
             @keyframes claude-spin {
@@ -817,19 +1379,27 @@
             generateMessageViewerStyles() {
                 return `
             .message-user {
-                background-color: #f3f4f6;
+                background-color: var(--bg-tertiary);
                 border-left: 4px solid #3b82f6;
                 max-height: 400px;
                 overflow-y: auto;
                 width: 100%;
+                color: var(--text-primary);
+                padding: 1rem;
+                border-radius: 0.5rem;
+                margin-bottom: 0.75rem;
             }
 
             .message-assistant {
-                background-color: #f0f9ff;
+                background-color: var(--bg-secondary);
                 border-left: 4px solid #10b981;
                 max-height: 400px;
                 overflow-y: auto;
                 width: 100%;
+                color: var(--text-primary);
+                padding: 1rem;
+                border-radius: 0.5rem;
+                margin-bottom: 0.75rem;
             }
 
             .message-system {
@@ -838,6 +1408,19 @@
                 max-height: 400px;
                 overflow-y: auto;
                 width: 100%;
+                color: #78350f;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                margin-bottom: 0.75rem;
+            }
+
+            [data-theme="dark"] .message-system {
+                background-color: #451a03;
+                color: #fed7aa;
+            }
+
+            [data-theme="dark"] .message-system span[style*="color: #f59e0b"] {
+                color: #fbbf24 !important;
             }
 
             .message-summary {
@@ -846,6 +1429,15 @@
                 max-height: 400px;
                 overflow-y: auto;
                 width: 100%;
+                color: #713f12;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                margin-bottom: 0.75rem;
+            }
+
+            [data-theme="dark"] .message-summary {
+                background-color: #422006;
+                color: #fef3c7;
             }
 
             .message-tool {
@@ -854,6 +1446,72 @@
                 max-height: 400px;
                 overflow-y: auto;
                 width: 100%;
+                color: #581c87;
+                padding: 1rem;
+                border-radius: 0.5rem;
+                margin-bottom: 0.75rem;
+            }
+
+            [data-theme="dark"] .message-tool {
+                background-color: #2e1065;
+                color: #e9d5ff;
+            }
+
+            /* Model name styling for different themes */
+            [data-theme="dark"] .message-assistant span[style*="background-color: #e9d5ff"] {
+                background-color: #581c87 !important;
+                color: #e9d5ff !important;
+            }
+
+            /* Subtype label styling for different themes */
+            div[class*="mt-1 text-xs"][style*="color: var(--text-tertiary)"] {
+                background-color: var(--bg-tertiary);
+                padding: 2px 6px;
+                border-radius: 4px;
+                border: 1px solid var(--border-primary);
+                display: inline-block;
+            }
+
+            /* Summary and system content styling for dark theme */
+            [data-theme="dark"] .summary-content {
+                background-color: #422006 !important;
+                border-color: #92400e !important;
+            }
+
+            [data-theme="dark"] .summary-content .text-yellow-600 {
+                color: #fbbf24 !important;
+            }
+
+            [data-theme="dark"] .system-content {
+                background-color: #1e3a8a !important;
+                border-color: #1e40af !important;
+            }
+
+            [data-theme="dark"] .system-content .text-blue-600 {
+                color: #60a5fa !important;
+            }
+
+            /* Tool result styling for dark theme */
+            [data-theme="dark"] .bg-green-50 {
+                background-color: #14532d !important;
+                border-color: #16a34a !important;
+            }
+
+            [data-theme="dark"] .text-green-600 {
+                color: #4ade80 !important;
+            }
+
+            /* Command output styling */
+            .command-output {
+                background-color: #1f2937;
+                color: #f9fafb;
+                border: 1px solid #374151;
+            }
+
+            [data-theme="light"] .command-output {
+                background-color: #f8fafc;
+                color: #1f2937;
+                border-color: #e2e8f0;
             }
 
             .conversation-card {
@@ -862,7 +1520,44 @@
 
             .conversation-card:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.1);
+                box-shadow: var(--shadow-color) 0 4px 12px -2px;
+            }
+
+            .message-viewer-container {
+                background-color: var(--bg-primary);
+                border: 1px solid var(--border-primary);
+                border-radius: 0.75rem;
+                box-shadow: var(--shadow-color) 0 4px 6px -1px, var(--shadow-color) 0 2px 4px -1px;
+                height: 100%;
+                min-height: 0;
+                overflow: hidden;
+                display: flex;
+                flex-direction: column;
+            }
+
+            #conversationContent {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                padding-right: 0.5rem;
+            }
+
+            #conversationContent::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            #conversationContent::-webkit-scrollbar-track {
+                background: var(--bg-secondary);
+                border-radius: 4px;
+            }
+
+            #conversationContent::-webkit-scrollbar-thumb {
+                background: var(--border-tertiary);
+                border-radius: 4px;
+            }
+
+            #conversationContent::-webkit-scrollbar-thumb:hover {
+                background: #94a3b8;
             }
 
             .code-block {
@@ -878,6 +1573,13 @@
                 font-family: 'Courier New', monospace;
                 font-size: 0.875rem;
                 line-height: 1.25;
+                border: 1px solid var(--border-primary);
+            }
+
+            [data-theme="light"] .json-code {
+                background-color: #f8fafc;
+                color: #1f2937;
+                border: 1px solid #e2e8f0;
             }
 
             .json-key {
@@ -885,44 +1587,88 @@
                 font-weight: 600;
             }
 
+            [data-theme="light"] .json-key {
+                color: #7c3aed;
+            }
+
             .json-string {
                 color: #10b981;
+            }
+
+            [data-theme="light"] .json-string {
+                color: #059669;
             }
 
             .json-number {
                 color: #3b82f6;
             }
 
+            [data-theme="light"] .json-number {
+                color: #2563eb;
+            }
+
             .json-boolean {
                 color: #f59e0b;
+            }
+
+            [data-theme="light"] .json-boolean {
+                color: #d97706;
             }
 
             .json-null {
                 color: #ef4444;
             }
 
+            [data-theme="light"] .json-null {
+                color: #dc2626;
+            }
+
             .tool-call {
-                background-color: #f8fafc;
-                border: 1px solid #e2e8f0;
+                background-color: var(--bg-tertiary);
+                border: 1px solid var(--border-primary);
                 border-radius: 0.375rem;
                 padding: 0.75rem;
+                color: var(--text-primary);
                 margin-top: 0.5rem;
             }
 
             .tool-name {
                 font-weight: 600;
-                color: #7c3aed;
+                color: #8b5cf6;
                 margin-bottom: 0.25rem;
             }
 
+            [data-theme="light"] .tool-name {
+                color: #7c3aed;
+            }
+
             .tool-description {
-                color: #4b5563;
+                color: var(--text-secondary);
                 font-size: 0.875rem;
             }
 
             .todo-list {
                 max-height: 40vh;
                 overflow-y: auto;
+                scrollbar-color: var(--border-tertiary) var(--bg-primary);
+            }
+
+            .todo-list::-webkit-scrollbar {
+                width: 12px;
+            }
+
+            .todo-list::-webkit-scrollbar-track {
+                background: var(--bg-primary);
+                border-radius: 4px;
+            }
+
+            .todo-list::-webkit-scrollbar-thumb {
+                background: var(--border-tertiary);
+                border-radius: 4px;
+            }
+
+            .todo-list::-webkit-scrollbar-thumb:hover {
+                background: var(--border-secondary);
             }
 
             .fade-in {
@@ -936,27 +1682,83 @@
 
             /* Scrollbar styles */
             .scroll-container {
-                overflow-y: auto;
-                scrollbar-width: thin;
-                scrollbar-color: #cbd5e1 #f8fafc;
+                overflow-y: auto; 
+                scrollbar-color: var(--border-tertiary) var(--bg-primary);
             }
 
             .scroll-container::-webkit-scrollbar {
-                width: 12px;
+                width: 14px;
             }
 
             .scroll-container::-webkit-scrollbar-track {
-                background: #f8fafc;
+                background: var(--bg-primary);
                 border-radius: 4px;
             }
 
             .scroll-container::-webkit-scrollbar-thumb {
-                background: #cbd5e1;
+                background: var(--border-tertiary);
                 border-radius: 4px;
             }
 
             .scroll-container::-webkit-scrollbar-thumb:hover {
-                background: #94a3b8;
+                background: var(--border-secondary);
+            }
+
+            .empty-state {
+                text-align: center;
+                color: var(--text-tertiary);
+                padding: 3rem 2rem;
+            }
+
+            .message-header {
+                color: var(--text-secondary);
+                font-size: 0.875rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .message-content {
+                line-height: 1.6;
+            }
+
+            /* Message content specific colors for different message types */
+            .message-summary .message-content {
+                color: #713f12;
+            }
+
+            [data-theme="dark"] .message-summary .message-content {
+                color: #fef3c7;
+            }
+
+            .message-system .message-content {
+                color: #78350f;
+            }
+
+            [data-theme="dark"] .message-system .message-content {
+                color: #fed7aa;
+            }
+
+            /* Default content color for other message types */
+            .message-user .message-content,
+            .message-assistant .message-content,
+            .message-tool .message-content {
+                color: var(--text-primary);
+            }
+
+            /* Content colors for nested content items */
+            .summary-content-text {
+                color: #713f12;
+            }
+
+            [data-theme="dark"] .summary-content-text {
+                color: #fef3c7;
+            }
+
+            .system-content-text {
+                color: #1e40af;
+            }
+
+            [data-theme="dark"] .system-content-text {
+                color: #dbeafe;
             }
 
             /* Message content scrollbar styling */
@@ -992,52 +1794,6 @@
         `;
             }
 
-            generateSessionNavigatorStyles() {
-                return `
-            .session-navigator {
-                background-color: white;
-                border-radius: 0.5rem;
-                padding: 1rem;
-                margin-top: 1rem;
-                border: 1px solid #e5e7eb;
-            }
-
-            .session-controls {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                gap: 0.5rem;
-            }
-
-            .session-info {
-                text-align: center;
-                flex: 1;
-                font-size: 0.875rem;
-                color: #6b7280;
-            }
-
-            .session-button {
-                background-color: #3b82f6;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 0.375rem;
-                cursor: pointer;
-                font-size: 0.875rem;
-                transition: background-color 0.2s;
-            }
-
-            .session-button:hover:not(:disabled) {
-                background-color: #2563eb;
-            }
-
-            .session-button:disabled {
-                background-color: #9ca3af;
-                cursor: not-allowed;
-            }
-        `;
-            }
-
             generateDiffModalStyles() {
                 return `
             .diff-modal {
@@ -1053,8 +1809,52 @@
                 z-index: 1000;
             }
 
+            /* Basic utility styles */
+            .text-lg {
+                font-size: 1.125rem;
+                line-height: 1.75rem;
+                font-weight: 600;
+            }
+
+            .font-semibold {
+                font-weight: 600;
+            }
+
+            .flex {
+                display: flex;
+            }
+
+            .items-center {
+                align-items: center;
+            }
+
+            .justify-between {
+                justify-content: space-between;
+            }
+
+            .flex-col {
+                flex-direction: column;
+            }
+
+            .flex-1 {
+                flex: 1;
+            }
+
+            .ml-2 {
+                margin-left: 0.5rem;
+            }
+
+            .mr-1 {
+                margin-right: 0.25rem;
+            }
+
+            .text-xs {
+                font-size: 0.75rem;
+                line-height: 1rem;
+            }
+
             .diff-modal-content {
-                background-color: white;
+                background-color: #ffffff;
                 border-radius: 0.5rem;
                 width: 95%;
                 max-width: 1400px;
@@ -1062,6 +1862,14 @@
                 overflow: hidden;
                 display: flex;
                 flex-direction: column;
+                border: 1px solid #e5e7eb;
+                box-shadow: rgba(0, 0, 0, 0.1) 0 25px 50px -12px;
+            }
+
+            [data-theme="dark"] .diff-modal-content {
+                background-color: #1f2937;
+                border-color: #374151;
+                box-shadow: rgba(0, 0, 0, 0.3) 0 25px 50px -12px;
             }
 
             .diff-modal-header {
@@ -1070,6 +1878,26 @@
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                background-color: #f9fafb;
+                position: relative;
+                z-index: 10;
+            }
+
+            .diff-modal-header h3 {
+                color: #1e293b !important;
+                font-size: 1.125rem !important;
+                font-weight: 600 !important;
+                z-index: 11;
+                position: relative;
+            }
+
+            [data-theme="dark"] .diff-modal-header h3 {
+                color: #f1f5f9 !important;
+            }
+
+            [data-theme="dark"] .diff-modal-header {
+                border-bottom-color: #374151;
+                background-color: #111827;
             }
 
             .diff-modal-body {
@@ -1085,6 +1913,12 @@
                 border-right: 1px solid #e5e7eb;
                 display: flex;
                 flex-direction: column;
+                background-color: #ffffff;
+            }
+
+            [data-theme="dark"] .diff-panel {
+                border-right-color: #374151;
+                background-color: #1f2937;
             }
 
             .diff-panel:last-child {
@@ -1094,20 +1928,31 @@
             .diff-panel-header {
                 font-weight: 600;
                 margin-bottom: 0.5rem;
-                color: #374151;
+                color: #111827;
+            }
+
+            [data-theme="dark"] .diff-panel-header {
+                color: #f9fafb;
             }
 
             .diff-textarea {
                 flex: 1;
-                border: 1px solid #d1d5db;
+                border: 1px solid #e5e7eb;
                 border-radius: 0.375rem;
                 padding: 0.75rem;
                 font-family: 'Courier New', monospace;
                 font-size: 0.875rem;
                 resize: none;
                 background-color: #f9fafb;
+                color: #111827;
                 overflow: auto;
                 white-space: pre;
+            }
+
+            [data-theme="dark"] .diff-textarea {
+                border-color: #374151;
+                background-color: #111827;
+                color: #f9fafb;
             }
 
             .diff-textarea:focus {
@@ -1116,133 +1961,753 @@
                 box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
             }
 
+            [data-theme="dark"] .diff-textarea:focus {
+                border-color: #60a5fa;
+                box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
+            }
+
             .diff-button {
-                background-color: #3b82f6;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 0.375rem;
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%);
+                color: #ffffff;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 0.375rem 0.875rem;
+                border-radius: 0.625rem;
                 cursor: pointer;
+                font-size: 0.75rem;
+                font-weight: 600;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
+                letter-spacing: 0.015em;
+                z-index: 1;
+                display: inline-flex;
+                align-items: center;
+                gap: 0.25rem;
+                min-height: 2rem;
+                backdrop-filter: blur(8px);
+                -webkit-backdrop-filter: blur(8px);
+            }
+
+            .diff-button::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+                transition: left 0.4s ease;
+            }
+
+            .diff-button::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 0;
+                height: 0;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.08);
+                transform: translate(-50%, -50%);
+                transition: width 0.5s ease, height 0.5s ease;
+            }
+
+            .diff-button .icon {
                 font-size: 0.875rem;
-                transition: background-color 0.2s;
+                filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+            }
+
+            .diff-button .badge {
+                background: rgba(255, 255, 255, 0.2);
+                color: #ffffff;
+                font-size: 0.625rem;
+                padding: 0.125rem 0.375rem;
+                border-radius: 0.25rem;
+                margin-left: 0.25rem;
+                font-weight: 700;
+            }
+
+            [data-theme="dark"] .diff-button {
+                background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%);
+                border-color: rgba(255, 255, 255, 0.08);
+                box-shadow: 0 1px 3px rgba(79, 70, 229, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2);
             }
 
             .diff-button:hover {
-                background-color: #2563eb;
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%);
+                transform: translateY(-1px) scale(1.01);
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1);
+                border-color: rgba(255, 255, 255, 0.15);
+            }
+
+            .diff-button:hover::before {
+                left: 100%;
+            }
+
+            .diff-button:active {
+                transform: translateY(0) scale(0.99);
+                box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1);
+            }
+
+            .diff-button:active::after {
+                width: 200px;
+                height: 200px;
+            }
+
+            [data-theme="dark"] .diff-button:hover {
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%);
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3);
+            }
+
+            .diff-button:focus-visible {
+                outline: 2px solid #6366f1;
+                outline-offset: 2px;
+            }
+
+            [data-theme="dark"] .diff-button:focus-visible {
+                outline-color: #8b5cf6;
             }
 
             .diff-button-secondary {
-                background-color: #6b7280;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 0.375rem;
+                background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                color: #475569;
+                border: 1px solid #cbd5e1;
+                padding: 0.625rem 1.25rem;
+                border-radius: 0.75rem;
                 cursor: pointer;
-                font-size: 0.875rem;
-                transition: background-color 0.2s;
+                font-size: 0.8125rem;
+                font-weight: 500;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                position: relative;
+                overflow: hidden;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+                z-index: 1;
+            }
+
+            .diff-button-secondary::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+                transition: left 0.5s ease;
+            }
+
+            [data-theme="dark"] .diff-button-secondary {
+                background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+                color: #cbd5e1;
+                border-color: #475569;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
             }
 
             .diff-button-secondary:hover {
-                background-color: #4b5563;
+                background: linear-gradient(135deg, #f1f5f9 0%, #cbd5e1 100%);
+                color: #334155;
+                transform: translateY(-2px) scale(1.02);
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+                border-color: #94a3b8;
             }
 
+            .diff-button-secondary:hover::before {
+                left: 100%;
+            }
+
+            .diff-button-secondary:active {
+                transform: translateY(0) scale(0.98);
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            }
+
+            [data-theme="dark"] .diff-button-secondary:hover {
+                background: linear-gradient(135deg, #475569 0%, #334155 100%);
+                color: #e2e8f0;
+                box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+                border-color: #64748b;
+            }
+
+            /* Diff comparison styles */
             .diff-comparison {
                 flex: 1;
-                padding: 0.75rem;
-                background-color: #f9fafb;
-                border-radius: 0.375rem;
-                border: 1px solid #d1d5db;
+                padding: 1.5rem;
+                background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+                border-radius: 1rem;
+                border: 1px solid #e2e8f0;
                 overflow-y: auto;
-                font-family: 'Courier New', monospace;
-                font-size: 0.875rem;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+                font-size: 0.8125rem;
+                line-height: 1.6;
+                color: #1e293b;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+                position: relative;
+            }
+
+            [data-theme="dark"] .diff-comparison {
+                background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+                border-color: #334155;
+                color: #e2e8f0;
+                box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
             }
 
             .diff-comparison-header {
                 font-weight: 600;
-                margin-bottom: 0.5rem;
-                color: #374151;
+                margin-bottom: 1rem;
+                color: #1e293b;
+                font-size: 0.875rem;
+                text-transform: uppercase;
+                letter-spacing: 0.025em;
+                padding-bottom: 0.5rem;
+                border-bottom: 2px solid #e2e8f0;
+            }
+
+            [data-theme="dark"] .diff-comparison-header {
+                color: #f1f5f9;
+                border-bottom-color: #334155;
             }
 
             .diff-line {
-                margin-bottom: 0.25rem;
-                font-family: 'Courier New', monospace;
-                font-size: 0.875rem;
+                margin-bottom: 0.125rem;
+                font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+                font-size: 0.8125rem;
+                line-height: 1.7;
+                padding: 0.25rem 0.5rem;
+                border-radius: 0.375rem;
+                transition: all 0.2s ease;
+                position: relative;
+            }
+
+            .diff-line:hover {
+                background-color: rgba(0, 0, 0, 0.02);
+                transform: translateX(2px);
+            }
+
+            [data-theme="dark"] .diff-line:hover {
+                background-color: rgba(255, 255, 255, 0.02);
             }
 
             .diff-added {
-                background-color: #dcfce7;
+                background: linear-gradient(135deg, #dcfce7 0%, #bbf7d0 100%);
                 color: #166534;
-                padding: 0.125rem 0.25rem;
-                border-radius: 0.125rem;
+                padding: 0.5rem 0.75rem;
+                border-radius: 0.5rem;
+                border-left: 4px solid #22c55e;
+                position: relative;
+                box-shadow: 0 2px 4px rgba(34, 197, 94, 0.1);
+            }
+
+            .diff-added::before {
+                content: '+';
+                position: absolute;
+                left: -1rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #22c55e;
+                font-weight: bold;
+                font-size: 1rem;
+            }
+
+            [data-theme="dark"] .diff-added {
+                background: linear-gradient(135deg, #14532d 0%, #166534 100%);
+                color: #86efac;
+                border-left-color: #4ade80;
+                box-shadow: 0 2px 4px rgba(74, 222, 128, 0.1);
+            }
+
+            [data-theme="dark"] .diff-added::before {
+                color: #4ade80;
             }
 
             .diff-removed {
-                background-color: #fee2e2;
+                background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
                 color: #991b1b;
-                padding: 0.125rem 0.25rem;
-                border-radius: 0.125rem;
+                padding: 0.5rem 0.75rem;
+                border-radius: 0.5rem;
+                border-left: 4px solid #ef4444;
+                position: relative;
+                box-shadow: 0 2px 4px rgba(239, 68, 68, 0.1);
+            }
+
+            .diff-removed::before {
+                content: '-';
+                position: absolute;
+                left: -1rem;
+                top: 50%;
+                transform: translateY(-50%);
+                color: #ef4444;
+                font-weight: bold;
+                font-size: 1rem;
+            }
+
+            [data-theme="dark"] .diff-removed {
+                background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
+                color: #fca5a5;
+                border-left-color: #f87171;
+                box-shadow: 0 2px 4px rgba(248, 113, 113, 0.1);
+            }
+
+            [data-theme="dark"] .diff-removed::before {
+                color: #f87171;
             }
 
             .diff-unchanged {
-                color: #6b7280;
+                color: #64748b;
+                padding: 0.25rem 0.75rem;
+                transition: all 0.2s ease;
             }
 
+            .diff-unchanged:hover {
+                color: #475569;
+                background-color: rgba(0, 0, 0, 0.02);
+            }
+
+            [data-theme="dark"] .diff-unchanged {
+                color: #94a3b8;
+            }
+
+            [data-theme="dark"] .diff-unchanged:hover {
+                color: #cbd5e1;
+                background-color: rgba(255, 255, 255, 0.02);
+            }
+
+            /* Enhanced scrollbar styles */
+            .diff-comparison::-webkit-scrollbar {
+                width: 10px;
+            }
+
+            .diff-comparison::-webkit-scrollbar-track {
+                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+                border-radius: 5px;
+                border: 1px solid #cbd5e1;
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-track {
+                background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+                border-color: #475569;
+            }
+
+            .diff-comparison::-webkit-scrollbar-thumb {
+                background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
+                border-radius: 5px;
+                border: 1px solid #94a3b8;
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-thumb {
+                background: linear-gradient(135deg, #475569 0%, #64748b 100%);
+                border-color: #64748b;
+            }
+
+            .diff-comparison::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-thumb:hover {
+                background: linear-gradient(135deg, #64748b 0%, #94a3b8 100%);
+            }
+
+            /* Diff tabs styles */
             .diff-edit-tabs {
                 display: flex;
-                border-bottom: 1px solid #e5e7eb;
-                background-color: #f9fafb;
-                padding: 0 1rem;
+                background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+                border-bottom: 2px solid #e2e8f0;
+                padding: 0.5rem;
+                gap: 0.25rem;
+                overflow-x: auto;
+                scrollbar-width: thin;
+                scrollbar-color: #cbd5e1 transparent;
+            }
+
+            .diff-edit-tabs::-webkit-scrollbar {
+                height: 4px;
+            }
+
+            .diff-edit-tabs::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .diff-edit-tabs::-webkit-scrollbar-thumb {
+                background: #cbd5e1;
+                border-radius: 2px;
+            }
+
+            [data-theme="dark"] .diff-edit-tabs {
+                background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+                border-bottom-color: #334155;
+            }
+
+            [data-theme="dark"] .diff-edit-tabs::-webkit-scrollbar-thumb {
+                background: #475569;
             }
 
             .diff-edit-tab {
-                background: none;
+                background: transparent;
                 border: none;
-                padding: 0.75rem 1rem;
+                padding: 0.75rem 1.25rem;
                 cursor: pointer;
-                border-bottom: 2px solid transparent;
-                color: #6b7280;
-                font-size: 0.875rem;
-                transition: all 0.2s;
+                border-radius: 0.75rem;
+                color: #64748b;
+                font-size: 0.8125rem;
+                font-weight: 500;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
                 white-space: nowrap;
+                position: relative;
+                overflow: hidden;
+                z-index: 1;
+            }
+
+            .diff-edit-tab::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                border-radius: 0.75rem;
+                z-index: -1;
             }
 
             .diff-edit-tab:hover {
-                color: #374151;
-                background-color: #f3f4f6;
+                color: #334155;
+                background: rgba(255, 255, 255, 0.5);
+                transform: translateY(-1px);
+            }
+
+            .diff-edit-tab:hover::before {
+                opacity: 0.1;
             }
 
             .diff-edit-tab.active {
-                color: #3b82f6;
-                border-bottom-color: #3b82f6;
-                background-color: #ffffff;
+                color: #ffffff;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+                transform: translateY(-1px);
             }
+
+            .diff-edit-tab.active::before {
+                opacity: 1;
+                z-index: -1;
+            }
+
+            [data-theme="dark"] .diff-edit-tab {
+                color: #94a3b8;
+            }
+
+            [data-theme="dark"] .diff-edit-tab:hover {
+                color: #cbd5e1;
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            [data-theme="dark"] .diff-edit-tab.active {
+                background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+                box-shadow: 0 4px 12px rgba(79, 70, 229, 0.4);
+            }
+
+            /* Ensure text visibility in all states */
+            .diff-edit-tab,
+            .diff-content-tab,
+            .diff-button,
+            .diff-button-secondary {
+                text-shadow: none !important;
+            }
+
+            /* Additional button spacing optimizations */
+            .diff-button + .diff-button {
+                margin-left: 0.5rem;
+            }
+
+            .diff-button {
+                margin-left: 0.5rem;
+                vertical-align: middle;
+            }
+
+            /* Mobile optimization for diff buttons */
+            @media (max-width: 768px) {
+                .diff-button {
+                    padding: 0.3125rem 0.75rem;
+                    font-size: 0.7rem;
+                    min-height: 1.875rem;
+                }
+
+                .diff-button .icon {
+                    font-size: 0.75rem;
+                }
+
+                .diff-button .badge {
+                    font-size: 0.5625rem;
+                    padding: 0.09375rem 0.3125rem;
+                }
+            }
+
+            /* Ensure button content is properly aligned */
+            .diff-button > span:not(.icon):not(.badge) {
+                line-height: 1.2;
+            }
+
+            /* Animation optimization for performance */
+            .diff-button {
+                will-change: transform, box-shadow;
+            }
+
+            .diff-button:hover {
+                will-change: transform, box-shadow, background;
+            }
+
+            /* Force override conflicting styles */
+            button.diff-button {
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%) !important;
+                color: #ffffff !important;
+                border: 1px solid rgba(255, 255, 255, 0.1) !important;
+                padding: 0.375rem 0.875rem !important;
+                border-radius: 0.625rem !important;
+                cursor: pointer !important;
+                font-size: 0.75rem !important;
+                font-weight: 600 !important;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+                position: relative !important;
+                overflow: hidden !important;
+                box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+                letter-spacing: 0.015em !important;
+                z-index: 1 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                gap: 0.25rem !important;
+                min-height: 2rem !important;
+                backdrop-filter: blur(8px) !important;
+                -webkit-backdrop-filter: blur(8px) !important;
+                text-shadow: none !important;
+                text-transform: none !important;
+                margin-left: 0.5rem !important;
+                vertical-align: middle !important;
+            }
+
+            button.diff-button:hover {
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%) !important;
+                transform: translateY(-1px) scale(1.01) !important;
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4), 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+                border-color: rgba(255, 255, 255, 0.15) !important;
+            }
+
+            button.diff-button:active {
+                transform: translateY(0) scale(0.99) !important;
+                box-shadow: 0 1px 3px rgba(99, 102, 241, 0.3), 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+            }
+
+            /* Dark theme overrides */
+            [data-theme="dark"] button.diff-button {
+                background: linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%) !important;
+                border-color: rgba(255, 255, 255, 0.08) !important;
+                box-shadow: 0 1px 3px rgba(79, 70, 229, 0.4), 0 1px 2px rgba(0, 0, 0, 0.2) !important;
+            }
+
+            [data-theme="dark"] button.diff-button:hover {
+                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%) !important;
+                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5), 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+            }
+
+            /* Icon and badge styling */
+            button.diff-button .icon {
+                font-size: 0.875rem !important;
+                filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1)) !important;
+            }
+
+            button.diff-button .badge {
+                background: rgba(255, 255, 255, 0.2) !important;
+                color: #ffffff !important;
+                font-size: 0.625rem !important;
+                padding: 0.125rem 0.375rem !important;
+                border-radius: 0.25rem !important;
+                margin-left: 0.25rem !important;
+                font-weight: 700 !important;
+            }
+
+            button.diff-button > span:not(.icon):not(.badge) {
+                line-height: 1.2 !important;
+            }
+
+            /* Debug styles - highlight buttons for visibility */
+            button.diff-button::before {
+                content: '';
+                position: absolute;
+                top: -2px;
+                left: -2px;
+                right: -2px;
+                bottom: -2px;
+                border: 2px solid #ff6b6b;
+                border-radius: 0.75rem;
+                z-index: -1;
+                opacity: 0.5;
+                pointer-events: none;
+            }
+
+            /* Remove debug styles after confirming visibility */
+            /* button.diff-button::before { display: none; } */
+
+            .diff-edit-tab span,
+            .diff-content-tab span {
+                position: relative;
+                z-index: 3;
+                color: inherit;
+                font-weight: inherit;
+            }
+
+        /* Ensure tab button text is visible in all states */
+        .diff-edit-tab,
+        .diff-content-tab {
+            color: #64748b;
+            position: relative;
+        }
+
+        .diff-edit-tab.active,
+        .diff-content-tab.active {
+            color: #ffffff !important;
+        }
+
+        [data-theme="dark"] .diff-edit-tab,
+        [data-theme="dark"] .diff-content-tab {
+            color: #94a3b8;
+        }
+
+        [data-theme="dark"] .diff-edit-tab.active,
+        [data-theme="dark"] .diff-content-tab.active {
+            color: #ffffff !important;
+        }
+
+        /* Additional fixes for text visibility */
+        .diff-content-tab.active::after,
+        .diff-edit-tab.active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 0;
+            border-radius: inherit;
+        }
+
+        .diff-content-tab,
+        .diff-edit-tab {
+            z-index: 1;
+        }
+
+        .diff-content-tab *,
+        .diff-edit-tab * {
+            color: inherit !important;
+            position: relative;
+            z-index: 1;
+        }
+
+        .diff-content-tab.active *,
+        .diff-edit-tab.active * {
+            color: #ffffff !important;
+        }
+
+        /* Force text color for active tabs */
+        .diff-content-tab.active,
+        .diff-edit-tab.active {
+            color: #ffffff !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+        }
+
+        [data-theme="dark"] .diff-content-tab.active,
+        [data-theme="dark"] .diff-edit-tab.active {
+            color: #ffffff !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8) !important;
+        }
+
+        /* Override any inherited text styles */
+        .diff-content-tab.active span,
+        .diff-edit-tab.active span {
+            color: #ffffff !important;
+        }
 
             .diff-content-tabs {
                 display: flex;
-                border-bottom: 1px solid #e5e7eb;
-                margin-bottom: 1rem;
+                background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+                border-bottom: 2px solid #e2e8f0;
+                margin: 1rem;
+                margin-bottom: 0.5rem;
+                border-radius: 0.75rem;
+                padding: 0.25rem;
+                gap: 0.25rem;
+            }
+
+            [data-theme="dark"] .diff-content-tabs {
+                background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+                border-bottom-color: #475569;
             }
 
             .diff-content-tab {
-                background: none;
+                background: transparent;
                 border: none;
-                padding: 0.5rem 1rem;
+                padding: 0.625rem 1.25rem;
                 cursor: pointer;
-                border-bottom: 2px solid transparent;
-                color: #6b7280;
-                font-size: 0.875rem;
-                transition: all 0.2s;
+                border-radius: 0.625rem;
+                color: #64748b;
+                font-size: 0.8125rem;
+                font-weight: 500;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                position: relative;
+                overflow: hidden;
+                z-index: 1;
+            }
+
+            .diff-content-tab::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                opacity: 0;
+                transition: opacity 0.3s ease;
+                border-radius: 0.625rem;
+                z-index: -1;
             }
 
             .diff-content-tab:hover {
-                color: #374151;
-                background-color: #f9fafb;
+                color: #334155;
+                background: rgba(255, 255, 255, 0.6);
+                transform: translateY(-1px);
+            }
+
+            .diff-content-tab:hover::before {
+                opacity: 0.1;
             }
 
             .diff-content-tab.active {
-                color: #3b82f6;
-                border-bottom-color: #3b82f6;
-                background-color: #f0f9ff;
+                color: #ffffff !important;
+                background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+                box-shadow: 0 3px 8px rgba(16, 185, 129, 0.3);
+                transform: translateY(-1px);
+                font-weight: 600;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            }
+
+            .diff-content-tab.active::before {
+                opacity: 1;
+                z-index: -1;
+            }
+
+            [data-theme="dark"] .diff-content-tab {
+                color: #94a3b8;
+            }
+
+            [data-theme="dark"] .diff-content-tab:hover {
+                color: #cbd5e1;
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            [data-theme="dark"] .diff-content-tab.active {
+                background: linear-gradient(135deg, #059669 0%, #047857 100%);
+                box-shadow: 0 3px 8px rgba(5, 150, 105, 0.4);
+                color: #ffffff !important;
+                font-weight: 600;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
             }
 
             .diff-content-area {
@@ -1253,19 +2718,70 @@
 
             .diff-panel {
                 display: none;
-                flex: 1;
-                overflow: hidden;
-                flex-direction: column;
-                padding: 1rem;
-                border-right: 1px solid #e5e7eb;
-            }
-
-            .diff-panel:last-child {
-                border-right: none;
             }
 
             .diff-panel.active {
                 display: flex;
+            }
+
+            /* Ensure proper scrolling for diff content */
+            .diff-comparison::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .diff-comparison::-webkit-scrollbar-track {
+                background: #f3f4f6;
+                border-radius: 4px;
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-track {
+                background: #374151;
+            }
+
+            .diff-comparison::-webkit-scrollbar-thumb {
+                background: #9ca3af;
+                border-radius: 4px;
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-thumb {
+                background: #6b7280;
+            }
+
+            .diff-comparison::-webkit-scrollbar-thumb:hover {
+                background: #6b7280;
+            }
+
+            [data-theme="dark"] .diff-comparison::-webkit-scrollbar-thumb:hover {
+                background: #9ca3af;
+            }
+
+            /* Textarea styling improvements */
+            .diff-textarea {
+                outline: none;
+                resize: none;
+                font-family: 'Courier New', monospace;
+                white-space: pre;
+                word-wrap: normal;
+                overflow-wrap: normal;
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .diff-textarea::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .diff-textarea::-webkit-scrollbar-track {
+                background: var(--bg-tertiary);
+                border-radius: 4px;
+            }
+
+            .diff-textarea::-webkit-scrollbar-thumb {
+                background: var(--border-tertiary);
+                border-radius: 4px;
+            }
+
+            .diff-textarea::-webkit-scrollbar-thumb:hover {
+                background: var(--border-secondary);
             }
         `;
             }
@@ -1293,6 +2809,29 @@
 
             getDiffModalStyles() {
                 return this.generateDiffModalStyles();
+            }
+
+            // Theme management methods
+            getThemeManager() {
+                return this.themeManager;
+            }
+
+            getCurrentTheme() {
+                return this.themeManager.getCurrentTheme();
+            }
+
+            setTheme(theme) {
+                this.themeManager.setTheme(theme);
+            }
+
+            toggleTheme() {
+                return this.themeManager.toggleTheme();
+            }
+
+            // Initialize theme on app startup
+            initializeTheme() {
+                const theme = this.themeManager.getCurrentTheme();
+                document.documentElement.setAttribute('data-theme', theme);
             }
         }
 
@@ -1607,7 +3146,7 @@
                             const cleanedStdout = this.removeANSICodes(stdoutMatch[1]);
                             content = content.replace(
                                 /<local-command-stdout>[\s\S]*?<\/local-command-stdout>/,
-                                `\n\n**${this.languageManager.get('commandOutput')}:**\n\`\`\`\n${cleanedStdout}\n\`\`\`\n`
+                                `${this.languageManager.get('commandOutput')}:\n${cleanedStdout}`
                             );
                         }
                     }
@@ -1726,6 +3265,50 @@
 
             connectedCallback() {
                 this.render();
+
+                // Listen for theme changes
+                document.addEventListener('themeChanged', (event) => {
+                    this.handleThemeChanged(event.detail);
+                });
+            }
+
+            handleThemeChanged(themeDetails) {
+                // Update CSS variables in shadow DOM
+                const style = document.createElement('style');
+                style.textContent = `
+                    :host {
+                        --bg-primary: ${themeDetails.colors.bg.primary};
+                        --bg-secondary: ${themeDetails.colors.bg.secondary};
+                        --bg-tertiary: ${themeDetails.colors.bg.tertiary};
+                        --bg-quaternary: ${themeDetails.colors.bg.quaternary};
+
+                        --text-primary: ${themeDetails.colors.text.primary};
+                        --text-secondary: ${themeDetails.colors.text.secondary};
+                        --text-tertiary: ${themeDetails.colors.text.tertiary};
+                        --text-quaternary: ${themeDetails.colors.text.quaternary};
+                        --text-inverse: ${themeDetails.colors.text.inverse};
+
+                        --border-primary: ${themeDetails.colors.border.primary};
+                        --border-secondary: ${themeDetails.colors.border.secondary};
+                        --border-tertiary: ${themeDetails.colors.border.tertiary};
+
+                        --button-primary: ${themeDetails.colors.button.primary};
+                        --button-primary-hover: ${themeDetails.colors.button.primaryHover};
+                        --button-secondary: ${themeDetails.colors.button.secondary};
+                        --button-secondary-hover: ${themeDetails.colors.button.secondaryHover};
+
+                        --shadow-color: ${themeDetails.colors.bg.primary === '#ffffff' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.3)'};
+                    }
+                `;
+
+                // Remove old theme style if exists
+                const oldStyle = this.shadowRoot.getElementById('theme-style');
+                if (oldStyle) {
+                    oldStyle.remove();
+                }
+
+                style.id = 'theme-style';
+                this.shadowRoot.appendChild(style);
             }
 
             render() {
@@ -1734,12 +3317,12 @@
                 ${this.styleManager.generateTailwindStyles()}
                 ${this.styleManager.getFileBrowserStyles()}
             </style>
-            <div class="bg-white rounded-xl shadow-md p-4 flex-1 hidden" id="projectStructure">
-                <h2 class="text-lg font-semibold text-gray-800 mb-3 flex items-center">
-                    <span class="text-purple-500 mr-2">📊</span>
+            <div class="claude-file-browser-container p-4 hidden" id="projectStructure">
+                <h2 class="text-lg font-semibold mb-3 flex items-center" style="color: var(--text-primary);">
+                    <span class="mr-2" style="color: var(--button-primary);">📊</span>
                     <span id="projectStructureTitle">${this.languageManager.get('projectStructure')}</span>
                 </h2>
-                <div id="fileTree" class="bg-gray-50 rounded-lg p-3 claude-file-tree">
+                <div id="fileTree" class="claude-file-tree">
                     <!-- File tree will be dynamically generated -->
                 </div>
             </div>
@@ -1766,7 +3349,7 @@
                 fileTree.innerHTML = '';
 
                 if (!this.projectData || !this.projectData.projects) {
-                    fileTree.innerHTML = `<div class="text-center text-gray-500 py-4">${this.languageManager.get('noProjectData')}</div>`;
+                    fileTree.innerHTML = `<div class="empty-state">${this.languageManager.get('noProjectData')}</div>`;
                     return;
                 }
 
@@ -1774,8 +3357,9 @@
                 const directoryHandle = this.dataManager.getDirectoryHandle();
                 if (directoryHandle) {
                     const projectHeader = document.createElement('div');
-                    projectHeader.className = 'text-sm font-medium text-gray-700 mb-2 flex items-center';
-                    projectHeader.innerHTML = `<span class="text-yellow-500 mr-2">📁</span> ${directoryHandle.name}`;
+                    projectHeader.className = 'text-sm font-medium mb-2 flex items-center';
+                    projectHeader.style.cssText = 'color: var(--text-secondary);';
+                    projectHeader.innerHTML = `<span class="folder-icon">📁</span> ${directoryHandle.name}`;
                     fileTree.appendChild(projectHeader);
                 }
 
@@ -1808,11 +3392,12 @@
                 toggle.innerHTML = '<span class="text-xs">▶</span>';
 
                 const icon = document.createElement('span');
-                icon.className = 'text-blue-500 mr-2';
+                icon.className = 'folder-icon';
                 icon.textContent = '📁';
 
                 const name = document.createElement('span');
-                name.className = 'text-gray-700 text-sm';
+                name.className = 'text-sm';
+                name.style.cssText = 'color: var(--text-primary);';
                 name.textContent = project.name || this.languageManager.get('unnamedProject');
 
                 projectHeader.appendChild(toggle);
@@ -1849,7 +3434,7 @@
 
             createFileElement(file) {
                 const element = document.createElement('div');
-                element.className = 'claude-file-item flex flex-col text-gray-600 py-2 px-2 rounded cursor-pointer ml-4 text-sm border-0 hover:bg-gray-50';
+                element.className = 'claude-file-item flex flex-col cursor-pointer ml-4 text-sm border-0';
 
                 // File icon and date
                 const fileHeader = document.createElement('div');
@@ -1857,12 +3442,13 @@
 
                 // File icon
                 const fileIcon = document.createElement('span');
-                fileIcon.className = 'text-green-500 mr-2';
+                fileIcon.className = 'file-icon';
                 fileIcon.textContent = '📄';
 
                 // File date
                 const fileDate = document.createElement('span');
                 fileDate.className = 'font-medium';
+                fileDate.style.cssText = 'color: var(--text-secondary);';
                 fileDate.textContent = this.dataManager.formatFileDate(file.lastModified);
 
                 fileHeader.appendChild(fileIcon);
@@ -1870,7 +3456,7 @@
 
                 // File preview
                 const filePreview = document.createElement('div');
-                filePreview.className = 'claude-file-preview text-xs text-gray-500 mt-1 ml-4';
+                filePreview.className = 'claude-file-preview mt-1 ml-4';
                 filePreview.textContent = this.languageManager.get('loadingPreview');
                 filePreview.setAttribute('data-file-name', file.name);
 
@@ -1881,11 +3467,17 @@
                 element.addEventListener('click', async () => {
                     // Remove previous selection
                     this.shadowRoot.querySelectorAll('.claude-file-item').forEach(item => {
+                        if (item.classList.contains('claude-active-file')) {
+                            this.resetTextColors(item);
+                        }
                         item.classList.remove('claude-active-file');
                     });
 
                     // Add current selection
                     element.classList.add('claude-active-file');
+
+                    // Force text color update to override inline styles
+                    this.forceTextColorUpdate(element);
 
                     await this.loadFileContent(file);
                     console.log('File loaded:', file.name);
@@ -2065,7 +3657,7 @@
                     const firstSession = sessions[0];
                     if (firstSession && firstSession.messages && firstSession.messages.length > 0) {
                         // Find the first user message specifically
-                        const firstUserMessage = firstSession.messages.find(msg => msg.role === 'user');
+                        const firstUserMessage = firstSession.messages.find(msg => msg.role === 'user' && msg?.content != 'Warmup');
                         let previewText = firstUserMessage ? firstUserMessage.content : this.languageManager.get('noUserMessage');
 
                         if (previewText.length > 100) {
@@ -2123,6 +3715,54 @@
                     }
                 });
             }
+
+            forceTextColorUpdate(element) {
+                // Force update all text elements inside the active file item
+                const textElements = element.querySelectorAll('*');
+                textElements.forEach(el => {
+                    if (el.style.color) {
+                        el.style.setProperty('color', '#ffffff', 'important');
+                    }
+                });
+
+                // Handle specific elements
+                const fileDate = element.querySelector('.font-medium');
+                if (fileDate) {
+                    fileDate.style.setProperty('color', '#ffffff', 'important');
+                }
+
+                const filePreview = element.querySelector('.claude-file-preview');
+                if (filePreview) {
+                    filePreview.style.setProperty('color', 'rgba(255, 255, 255, 0.9)', 'important');
+                }
+
+                const icons = element.querySelectorAll('.file-icon, .folder-icon');
+                icons.forEach(icon => {
+                    icon.style.setProperty('color', '#ffffff', 'important');
+                });
+            }
+
+            resetTextColors(element) {
+                // Reset text colors when element is no longer active
+                const textElements = element.querySelectorAll('*');
+                textElements.forEach(el => {
+                    if (el.style.color && el.style.getPropertyPriority('color') === 'important') {
+                        el.style.removeProperty('color');
+                    }
+                });
+
+                // Reset specific elements
+                const fileDate = element.querySelector('.font-medium');
+                if (fileDate) {
+                    fileDate.style.removeProperty('color');
+                    fileDate.style.setProperty('color', 'var(--text-secondary)');
+                }
+
+                const filePreview = element.querySelector('.claude-file-preview');
+                if (filePreview) {
+                    filePreview.style.removeProperty('color');
+                }
+            }
         }
 
 
@@ -2139,6 +3779,50 @@
             connectedCallback() {
                 this.render();
                 this.showInitialState();
+
+                // Listen for theme changes
+                document.addEventListener('themeChanged', (event) => {
+                    this.handleThemeChanged(event.detail);
+                });
+            }
+
+            handleThemeChanged(themeDetails) {
+                // Update CSS variables in shadow DOM
+                const style = document.createElement('style');
+                style.textContent = `
+                    :host {
+                        --bg-primary: ${themeDetails.colors.bg.primary};
+                        --bg-secondary: ${themeDetails.colors.bg.secondary};
+                        --bg-tertiary: ${themeDetails.colors.bg.tertiary};
+                        --bg-quaternary: ${themeDetails.colors.bg.quaternary};
+
+                        --text-primary: ${themeDetails.colors.text.primary};
+                        --text-secondary: ${themeDetails.colors.text.secondary};
+                        --text-tertiary: ${themeDetails.colors.text.tertiary};
+                        --text-quaternary: ${themeDetails.colors.text.quaternary};
+                        --text-inverse: ${themeDetails.colors.text.inverse};
+
+                        --border-primary: ${themeDetails.colors.border.primary};
+                        --border-secondary: ${themeDetails.colors.border.secondary};
+                        --border-tertiary: ${themeDetails.colors.border.tertiary};
+
+                        --button-primary: ${themeDetails.colors.button.primary};
+                        --button-primary-hover: ${themeDetails.colors.button.primaryHover};
+                        --button-secondary: ${themeDetails.colors.button.secondary};
+                        --button-secondary-hover: ${themeDetails.colors.button.secondaryHover};
+
+                        --shadow-color: ${themeDetails.colors.bg.primary === '#ffffff' ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.3)'};
+                    }
+                `;
+
+                // Remove old theme style if exists
+                const oldStyle = this.shadowRoot.getElementById('theme-style');
+                if (oldStyle) {
+                    oldStyle.remove();
+                }
+
+                style.id = 'theme-style';
+                this.shadowRoot.appendChild(style);
             }
 
             render() {
@@ -2146,11 +3830,10 @@
             <style>
                 ${this.styleManager.generateTailwindStyles()}
                 ${this.styleManager.getMessageViewerStyles()}
-                ${this.styleManager.getDiffModalStyles()}
             </style>
-            <div id="conversationDetail" class="bg-white rounded-xl shadow-md p-4 h-full hidden flex flex-col">
-                <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
-                    <span class="text-yellow-500 mr-2">💬</span>${this.languageManager.get('conversationDetails')}
+            <div id="conversationDetail" class="message-viewer-container p-4 h-full hidden flex flex-col">
+                <h2 class="text-lg font-semibold mb-4 flex items-center" style="color: var(--text-primary);">
+                    <span class="mr-2" style="color: var(--button-primary);">💬</span>${this.languageManager.get('conversationDetails')}
                 </h2>
                 <div id="conversationContent" class="flex-1">
                     <!-- Conversation content will be dynamically generated -->
@@ -2159,10 +3842,10 @@
 
             <!-- Initial state -->
             <div id="initialState"
-                class="bg-white rounded-xl shadow-md p-6 h-full flex flex-col items-center justify-center text-center">
-                <span class="text-5xl text-gray-400 mb-4">📁</span>
-                <h3 class="text-xl font-semibold text-gray-700 mb-2">${this.languageManager.get('initialStateTitle')}</h3>
-                <p class="text-gray-500 max-w-md">${this.languageManager.get('initialStateDescription')}</p>
+                class="message-viewer-container p-6 h-full flex flex-col items-center justify-center text-center">
+                <span class="text-5xl mb-4" style="color: var(--text-quaternary);">📁</span>
+                <h3 class="text-xl font-semibold mb-2" style="color: var(--text-primary);">${this.languageManager.get('initialStateTitle')}</h3>
+                <p class="max-w-md" style="color: var(--text-secondary);">${this.languageManager.get('initialStateDescription')}</p>
             </div>
         `;
             }
@@ -2314,6 +3997,7 @@
                 // Add event listeners for diff buttons
                 setTimeout(() => {
                     this.attachDiffButtonListeners(content);
+                    this.enhanceDiffButtonStyles(content);
                 }, 0);
             }
 
@@ -2326,11 +4010,11 @@
                 <div class="flex items-center mb-1">
                     <span class="text-blue-500 mr-2 text-sm">👤</span>
                     <span class="font-medium text-sm">${this.languageManager.get('user')}</span>
-                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                    <span class="text-xs ml-auto" style="color: var(--text-tertiary);">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
                 </div>
-                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+                <div class="whitespace-pre-wrap text-sm" style="color: var(--text-primary);">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
                 ${message.rawData && message.rawData.thinkingMetadata ? `
-                    <div class="mt-1 text-xs text-gray-500">
+                    <div class="mt-1 text-xs" style="color: var(--text-tertiary);">
                         <span class="mr-1">🧠</span>${this.languageManager.get('thinkingMode')}: ${message.rawData.thinkingMetadata.level || this.languageManager.get('unknownSession')}
                     </div>
                 ` : ''}
@@ -2341,22 +4025,22 @@
                 <div class="flex items-center mb-1">
                     <span class="text-yellow-500 mr-2 text-sm">📝</span>
                     <span class="font-medium text-sm">${this.languageManager.get('summary')}</span>
-                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                    <span class="text-xs ml-auto" style="color: var(--text-tertiary);">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
                 </div>
-                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+                <div class="whitespace-pre-wrap text-sm message-content">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
             `;
                 } else if (message.role === 'system') {
                     messageElement.className = 'message-system p-3 rounded-lg';
                     messageElement.innerHTML = `
                 <div class="flex items-center mb-1">
-                    <span class="text-blue-500 mr-2 text-sm">⚙️</span>
+                    <span class="mr-2 text-sm" style="color: #f59e0b;">⚙️</span>
                     <span class="font-medium text-sm">${this.languageManager.get('system')}</span>
-                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                    <span class="text-xs ml-auto" style="color: var(--text-tertiary);">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
                 </div>
-                <div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
+                <div class="whitespace-pre-wrap text-sm message-content">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>
                 ${message.rawData && message.rawData.subtype ? `
-                    <div class="mt-1 text-xs text-gray-500">
-                        <span class="mr-1">🏷️</span>${this.languageManager.get('subtype')}: ${message.rawData.subtype}
+                    <div class="mt-1 text-xs" style="color: var(--text-tertiary);">
+                        <span class="mr-1">🏷️</span>${this.languageManager.get('subtype')}: ${this.formatSubtype(message.rawData.subtype)}
                     </div>
                 ` : ''}
             `;
@@ -2365,7 +4049,7 @@
 
                     let modelInfo = '';
                     if (message.rawData && message.rawData.message && message.rawData.message.model) {
-                        modelInfo = `<span class="text-xs bg-purple-100 text-purple-800 px-1 py-0.5 rounded ml-1">${message.rawData.message.model}</span>`;
+                        modelInfo = `<span class="text-xs px-1 py-0.5 rounded ml-1" style="background-color: #e9d5ff; color: #6b21a8;">${message.rawData.message.model}</span>`;
                     }
 
                     let contentElements = '';
@@ -2388,7 +4072,7 @@
                     // Handle simple text content
                     let simpleContent = '';
                     if (!hasComplexContent && message.content) {
-                        simpleContent = `<div class="text-gray-700 whitespace-pre-wrap text-sm">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>`;
+                        simpleContent = `<div class="whitespace-pre-wrap text-sm" style="color: var(--text-primary);">${this.convertTodoToHTML(message.content) || this.languageManager.get('noMessageContent')}</div>`;
                     }
 
                     messageElement.innerHTML = `
@@ -2396,7 +4080,7 @@
                     <span class="text-green-500 mr-2 text-sm">🤖</span>
                     <span class="font-medium text-sm">${this.languageManager.get('assistant')}</span>
                     ${modelInfo}
-                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                    <span class="text-xs ml-auto" style="color: var(--text-tertiary);">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
                 </div>
                 ${contentElements}
                 ${simpleContent}
@@ -2414,7 +4098,7 @@
                 <div class="flex items-center mb-1">
                     <span class="text-yellow-500 mr-2 text-sm">❓</span>
                     <span class="font-medium text-sm">${message.type || this.languageManager.get('unknownType')}</span>
-                    <span class="text-xs text-gray-500 ml-auto">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
+                    <span class="text-xs ml-auto" style="color: var(--text-tertiary);">${message.timestamp ? new Date(message.timestamp).toLocaleTimeString(this.languageManager.getCurrentLanguage()) : this.languageManager.get('unknownSession')}</span>
                 </div>
                 <div class="json-code">
                     <pre>${this.formatJSON(message.rawData || {})}</pre>
@@ -2434,7 +4118,7 @@
                         return `
                     <div class="text-content">
                         ${showLabel ? '<div class="text-xs text-gray-500 mb-1">' + this.languageManager.get('textContent') + '</div>' : ''}
-                        <div class="text-gray-700 whitespace-pre-wrap text-sm">${textContent}</div>
+                        <div class="whitespace-pre-wrap text-sm" style="color: var(--text-primary);">${textContent}</div>
                     </div>
                 `;
 
@@ -2443,7 +4127,7 @@
                         return `
                     <div class="summary-content bg-yellow-50 p-3 rounded border border-yellow-200">
                         <div class="text-xs text-yellow-600 mb-1">${this.languageManager.get('summary')}</div>
-                        <div class="text-gray-700 whitespace-pre-wrap">${summaryContent}</div>
+                        <div class="whitespace-pre-wrap summary-content-text">${summaryContent}</div>
                     </div>
                 `;
 
@@ -2452,7 +4136,7 @@
                         return `
                     <div class="system-content bg-blue-50 p-3 rounded border border-blue-200">
                         <div class="text-xs text-blue-600 mb-1">${this.languageManager.get('system')}消息</div>
-                        <div class="text-gray-700 whitespace-pre-wrap">${systemContent}</div>
+                        <div class="whitespace-pre-wrap system-content-text">${systemContent}</div>
                     </div>
                 `;
 
@@ -2483,7 +4167,7 @@
                 if (item.name === 'local-command-stdout' && item.input && item.input.stdout) {
                     const cleanedStdout = this.dataManager.removeANSICodes(item.input.stdout);
                     toolDisplay = `
-                <div class="bg-gray-800 text-white p-3 rounded text-sm font-mono whitespace-pre-wrap overflow-x-auto">
+                <div class="p-3 rounded text-sm font-mono whitespace-pre-wrap overflow-x-auto command-output">
                     ${cleanedStdout}
                 </div>
             `;
@@ -2492,7 +4176,7 @@
                 else if (item.name === 'TodoWrite' && item.input && item.input.todos) {
                     const todoHTML = this.renderTodoList(item.input.todos);
                     toolDisplay = `
-                <div class="todo-container p-3 bg-white rounded border border-gray-200">
+                <div class="todo-container p-3 rounded" style="background-color: var(--bg-primary); border: 1px solid var(--border-primary);">
                     ${todoHTML}
                 </div>
             `;
@@ -2528,8 +4212,41 @@
                         });
 
                         comparisonButton = `
-                    <button class="diff-button ml-2 text-xs" data-edit-id="${editId}">
-                        <span class="mr-1">🔍</span>${this.languageManager.get('compareText')}${editsData.length > 1 ? ` (${editsData.length})` : ''}
+                    <button class="diff-button"
+                            data-edit-id="${editId}"
+                            title="${this.languageManager.get('compareText')}${editsData.length > 1 ? ` (${editsData.length} ${this.languageManager.get('editsCount')})` : ''}"
+                            style="
+                                background: linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%) !important;
+                                color: #ffffff !important;
+                                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                                padding: 6px 14px !important;
+                                border-radius: 10px !important;
+                                cursor: pointer !important;
+                                font-size: 12px !important;
+                                font-weight: 600 !important;
+                                transition: all 0.25s ease !important;
+                                box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+                                display: inline-flex !important;
+                                align-items: center !important;
+                                gap: 4px !important;
+                                min-height: 32px !important;
+                                margin-left: 8px !important;
+                                text-transform: none !important;
+                                text-shadow: none !important;
+                                position: relative !important;
+                                overflow: hidden !important;
+                            ">
+                        <span style="font-size: 14px !important; margin-right: 2px !important;">🔍</span>
+                        <span>${this.languageManager.get('compareText')}</span>
+                        ${editsData.length > 1 ? `<span style="
+                            background: rgba(255, 255, 255, 0.25) !important;
+                            color: #ffffff !important;
+                            font-size: 10px !important;
+                            padding: 2px 6px !important;
+                            border-radius: 4px !important;
+                            margin-left: 4px !important;
+                            font-weight: 700 !important;
+                        ">${editsData.length}</span>` : ''}
                     </button>
                 `;
 
@@ -2575,7 +4292,7 @@
                     resultDisplay = `
                 <div class="bg-green-50 p-3 rounded border border-green-200">
                     <div class="text-xs text-green-600 mb-1">${this.languageManager.get('toolResult')}</div>
-                    <div class="text-gray-700 whitespace-pre-wrap">${displayContent}</div>
+                    <div class="whitespace-pre-wrap" style="color: var(--text-primary);">${displayContent}</div>
                 </div>
             `;
                 } else {
@@ -2612,6 +4329,104 @@
                 });
             }
 
+            forceTextColorUpdate(element) {
+                // Force update all text elements inside the active file item
+                const textElements = element.querySelectorAll('*');
+                textElements.forEach(el => {
+                    if (el.style.color) {
+                        el.style.setProperty('color', '#ffffff', 'important');
+                    }
+                });
+
+                // Handle specific elements
+                const fileDate = element.querySelector('.font-medium');
+                if (fileDate) {
+                    fileDate.style.setProperty('color', '#ffffff', 'important');
+                }
+
+                const filePreview = element.querySelector('.claude-file-preview');
+                if (filePreview) {
+                    filePreview.style.setProperty('color', 'rgba(255, 255, 255, 0.9)', 'important');
+                }
+
+                const icons = element.querySelectorAll('.file-icon, .folder-icon');
+                icons.forEach(icon => {
+                    icon.style.setProperty('color', '#ffffff', 'important');
+                });
+            }
+
+            resetTextColors(element) {
+                // Reset text colors when element is no longer active
+                const textElements = element.querySelectorAll('*');
+                textElements.forEach(el => {
+                    if (el.style.color && el.style.getPropertyPriority('color') === 'important') {
+                        el.style.removeProperty('color');
+                    }
+                });
+
+                // Reset specific elements
+                const fileDate = element.querySelector('.font-medium');
+                if (fileDate) {
+                    fileDate.style.removeProperty('color');
+                    fileDate.style.setProperty('color', 'var(--text-secondary)');
+                }
+
+                const filePreview = element.querySelector('.claude-file-preview');
+                if (filePreview) {
+                    filePreview.style.removeProperty('color');
+                }
+            }
+
+            enhanceDiffButtonStyles(content) {
+                const diffButtons = content.querySelectorAll('.diff-button');
+                diffButtons.forEach(button => {
+                    // Add hover effects
+                    button.addEventListener('mouseenter', () => {
+                        button.style.transform = 'translateY(-2px) scale(1.02)';
+                        button.style.boxShadow = '0 8px 20px rgba(99, 102, 241, 0.4), 0 4px 8px rgba(0, 0, 0, 0.1)';
+                        button.style.background = 'linear-gradient(145deg, #7c3aed 0%, #a855f7 100%)';
+                    });
+
+                    button.addEventListener('mouseleave', () => {
+                        button.style.transform = 'translateY(0) scale(1)';
+                        button.style.boxShadow = '0 4px 12px rgba(99, 102, 241, 0.3)';
+                        button.style.background = 'linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%)';
+                    });
+
+                    button.addEventListener('mousedown', () => {
+                        button.style.transform = 'translateY(0) scale(0.98)';
+                        button.style.boxShadow = '0 2px 6px rgba(99, 102, 241, 0.2)';
+                    });
+
+                    button.addEventListener('mouseup', () => {
+                        button.style.transform = 'translateY(-2px) scale(1.02)';
+                        button.style.boxShadow = '0 8px 20px rgba(99, 102, 241, 0.4), 0 4px 8px rgba(0, 0, 0, 0.1)';
+                    });
+
+                    // Dark theme detection
+                    const updateTheme = () => {
+                        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                        if (isDark) {
+                            button.style.background = 'linear-gradient(145deg, #4f46e5 0%, #7c3aed 100%)';
+                            button.style.borderColor = 'rgba(255, 255, 255, 0.15)';
+                        } else {
+                            button.style.background = 'linear-gradient(145deg, #6366f1 0%, #8b5cf6 100%)';
+                            button.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                        }
+                    };
+
+                    // Initial theme setup
+                    updateTheme();
+
+                    // Listen for theme changes
+                    const observer = new MutationObserver(updateTheme);
+                    observer.observe(document.documentElement, {
+                        attributes: true,
+                        attributeFilter: ['data-theme']
+                    });
+                });
+            }
+
             showMultiEditComparison(edits, toolName = '') {
                 // Create modal
                 const modal = document.createElement('div');
@@ -2620,7 +4435,7 @@
                 let modalContent = `
             <div class="diff-modal-content">
                 <div class="diff-modal-header">
-                    <h3 class="text-lg font-semibold">${this.languageManager.get('textComparison')} - ${toolName} (${edits.length}${this.languageManager.get('editsCount')})</h3>
+                    <h3 class="text-lg font-semibold" style="color: var(--text-primary);">${this.languageManager.get('textComparison')} - ${toolName} (${edits.length}${this.languageManager.get('editsCount')})</h3>
                     <button class="diff-button-secondary close-diff-modal">${this.languageManager.get('closeButton')}</button>
                 </div>
                 <div class="diff-edit-tabs">
@@ -2661,12 +4476,17 @@
             </div>
         `;
 
+                // Set content first
                 modal.innerHTML = modalContent;
 
-                // Add diff modal styles to the modal itself
+                // Add styles to the modal
                 const styleElement = document.createElement('style');
                 styleElement.textContent = this.styleManager.getDiffModalStyles();
                 modal.appendChild(styleElement);
+
+                // Set theme attribute
+                const currentTheme = this.styleManager.getThemeManager().getCurrentTheme();
+                modal.setAttribute('data-theme', currentTheme);
 
                 document.body.appendChild(modal);
 
@@ -2788,7 +4608,7 @@
 
                             return `<div class="flex items-start mb-1">
                         <input type="checkbox" class="mt-1 mr-2" disabled>
-                        <span class="text-gray-700">${trimmedContent}</span>
+                        <span style="color: var(--text-primary);">${trimmedContent}</span>
                     </div>`;
                         });
 
@@ -2806,7 +4626,7 @@
 
             renderTodoList(todos) {
                 if (!todos || !Array.isArray(todos) || todos.length === 0) {
-                    return '<div class="text-gray-500 text-sm">无待办事项</div>';
+                    return `<div class="text-sm" style="color: var(--text-tertiary);">无待办事项</div>`;
                 }
 
                 let todoHTML = '<div class="todo-list space-y-2">';
@@ -2817,26 +4637,26 @@
                     const isCompleted = status === 'completed';
                     const isInProgress = status === 'in_progress';
 
-                    let statusClass = 'text-gray-700';
+                    let statusStyle = 'color: var(--text-primary);';
                     let statusIcon = '';
 
                     if (isCompleted) {
-                        statusClass = 'text-green-600 line-through';
-                        statusIcon = '<span class="text-green-500 mr-2">✅</span>';
+                        statusStyle = 'color: #86efac; text-decoration: line-through;';
+                        statusIcon = '<span class="mr-2" style="color: #22c55e;">✅</span>';
                     } else if (isInProgress) {
-                        statusClass = 'text-blue-600';
-                        statusIcon = '<span class="text-blue-500 mr-2">⏳</span>';
+                        statusStyle = 'color: #60a5fa;';
+                        statusIcon = '<span class="mr-2" style="color: #3b82f6;">⏳</span>';
                     } else {
-                        statusIcon = '<span class="text-gray-400 mr-2">⭕</span>';
+                        statusIcon = '<span class="mr-2" style="color: var(--text-quaternary);">⭕</span>';
                     }
 
                     todoHTML += `
-                <div class="flex items-start p-2 bg-white rounded border border-gray-200">
+                <div class="flex items-start p-2 rounded" style="background-color: var(--bg-secondary); border: 1px solid var(--border-primary);">
                     <div class="flex items-center flex-1">
                         ${statusIcon}
-                        <span class="${statusClass}">${todoContent}</span>
+                        <span style="${statusStyle}">${todoContent}</span>
                     </div>
-                    <span class="text-xs text-gray-500 ml-2 px-2 py-1 bg-gray-100 rounded">${status}</span>
+                    <span class="text-xs ml-2 px-2 py-1 rounded" style="color: var(--text-secondary); background-color: var(--bg-tertiary);">${status}</span>
                 </div>
             `;
                 });
@@ -2860,6 +4680,29 @@
                     console.error('格式化JSON时出错:', error);
                     return '无法格式化JSON数据';
                 }
+            }
+
+            formatSubtype(subtype) {
+                if (!subtype) return '';
+
+                // Handle common subtypes with friendly names
+                const subtypeMap = {
+                    'local_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? '本地命令' : 'Local Command',
+                    'local_command_stdout': this.languageManager.getCurrentLanguage() === 'zh-CN' ? '本地命令输出' : 'Local Command Output',
+                    'local_command_stderr': this.languageManager.getCurrentLanguage() === 'zh-CN' ? '本地命令错误' : 'Local Command Error',
+                    'shell_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? 'Shell命令' : 'Shell Command',
+                    'bash_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? 'Bash命令' : 'Bash Command',
+                    'python_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? 'Python命令' : 'Python Command',
+                    'system_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? '系统命令' : 'System Command',
+                    'user_command': this.languageManager.getCurrentLanguage() === 'zh-CN' ? '用户命令' : 'User Command'
+                };
+
+                // Convert underscores to spaces and capitalize first letter for unknown subtypes
+                const formattedSubtype = subtypeMap[subtype] ||
+                    subtype.replace(/_/g, ' ')
+                        .replace(/\b\w/g, l => l.toUpperCase());
+
+                return formattedSubtype;
             }
 
             updateLanguage() {
@@ -2893,7 +4736,7 @@
                 });
             }
         }
- 
+
         // Language manager component
         class LanguageManager {
             constructor() {
@@ -3145,6 +4988,9 @@
         window.languageManager = new LanguageManager();
         window.dataManager = new DataManager();
         window.styleManager = new StyleManager();
+
+        // Initialize theme globally
+        window.styleManager.initializeTheme();
 
         // Register custom elements
         customElements.define('claude-history-app', ClaudeCodeHistoryApp);
