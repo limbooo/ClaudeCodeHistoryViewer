@@ -120,24 +120,6 @@ To extend functionality, focus on these components:
 
 This project is for learning and research purposes only.
 
-## 🤝 Contributing
-
-Welcome to submit issues and improvement suggestions! I'm particularly interested in:
-- Additional tool visualizations
-- Performance optimizations
-- Browser compatibility improvements
-
-## 🔮 Future Plans
-
-- Export conversations to markdown and PDF formats
-- Advanced statistics and analytics dashboard
-- Plugin system for custom tool rendering
-- Conversation tagging and categorization
-- Bookmarking and annotation features
-- Integration with external documentation tools
-
----
-
 **Note**: This project requires modern browser support. Please ensure using Chrome 86+ or Edge 86+ versions for the best experience.
 
 *All data stays on your machine - no server uploads, complete privacy.*
