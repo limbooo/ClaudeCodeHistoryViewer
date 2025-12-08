@@ -53,6 +53,7 @@
             <style>
                 ${this.styleManager.generateTailwindStyles()}
                 ${this.styleManager.getAppStyles()}
+                ${this.getModalStyles()}
             </style>
             <div class="claude-app-container flex flex-col lg:flex-row gap-6">
                 <!-- Left Panel -->
@@ -65,7 +66,7 @@
                             </h2>
                             <div class="flex space-x-2">
                                 <button id="themeToggle" class="px-3 py-2 rounded text-sm transition-colors border-0 flex items-center hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
-                                    <span class="mr-1" id="themeToggleIcon">${this.styleManager.getThemeManager().getThemeInfo().icon}</span> 
+                                    <span class="mr-1" id="themeToggleIcon">${this.styleManager.getThemeManager().getThemeInfo().icon}</span>
                                 </button>
                                 <button id="languageToggle" class="px-3 py-2 rounded text-sm transition-colors border-0 flex items-center hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
                                     <span class="mr-1">🌐</span>
@@ -122,6 +123,85 @@
                     <message-viewer></message-viewer>
                 </div>
             </div>
+
+            <!-- Search Modal -->
+            <div id="searchModal" class="search-modal" style="display: none;">
+                <div class="search-modal-overlay"></div>
+                <div class="search-modal-content">
+                    <div class="search-modal-header">
+                        <h2 class="search-modal-title" style="color: var(--text-primary); font-size: 1.25rem; font-weight: 600; margin: 0;">
+                            🔍 ${this.languageManager.get('search')}
+                        </h2>
+                        <button id="closeSearchModal" class="search-modal-close" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-secondary); padding: 0.5rem;">×</button>
+                    </div>
+
+                    <div class="search-modal-body">
+                        <div class="search-modal-layout">
+                            <!-- Left Panel: Search Controls -->
+                            <div class="search-left-panel">
+                                <div class="search-controls-container">
+                                    <!-- Search Input -->
+                                    <div class="mb-4">
+                                        <input type="text" id="modalSearchInput"
+                                            placeholder="${this.languageManager.get('searchPlaceholder')}"
+                                            class="w-full px-4 py-3 text-sm border rounded-lg"
+                                            style="background-color: var(--bg-tertiary); color: var(--text-primary); border-color: var(--border-primary);">
+                                    </div>
+
+                                    <!-- Search Options -->
+                                    <div class="mb-4">
+                                        <div class="text-sm font-medium mb-3" style="color: var(--text-primary);">${this.languageManager.get('searchOptions')}</div>
+
+                                        <div class="space-y-3 mb-4">
+                                            <label class="flex items-center text-sm" style="color: var(--text-secondary);">
+                                                <input type="checkbox" id="modalCaseSensitiveCheck" class="mr-2">
+                                                ${this.languageManager.get('caseSensitive')}
+                                            </label>
+                                            <label class="flex items-center text-sm" style="color: var(--text-secondary);">
+                                                <input type="checkbox" id="modalUseRegexCheck" class="mr-2">
+                                                ${this.languageManager.get('useRegex')}
+                                            </label>
+                                            <label class="flex items-center text-sm" style="color: var(--text-secondary);">
+                                                <input type="checkbox" id="modalIncludeFilenamesCheck" class="mr-2" checked>
+                                                ${this.languageManager.get('includeFilenames')}
+                                            </label>
+                                        </div>
+
+                                        <div class="text-sm mb-3" style="color: var(--text-primary);">${this.languageManager.get('searchScope')}</div>
+                                        <div class="space-y-2">
+                                            <label class="flex items-center text-sm" style="color: var(--text-secondary);">
+                                                <input type="radio" name="modalSearchScope" value="current" id="modalSearchScopeCurrent" class="mr-2">
+                                                ${this.languageManager.get('searchCurrentFile')}
+                                            </label>
+                                            <label class="flex items-center text-sm" style="color: var(--text-secondary);">
+                                                <input type="radio" name="modalSearchScope" value="all" id="modalSearchScopeAll" class="mr-2" checked>
+                                                ${this.languageManager.get('searchAllFiles')}
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- Search Actions -->
+                                    <div class="search-actions">
+                                        <button id="modalSearchBtn" class="w-full px-4 py-3 rounded text-sm transition-colors border-0 hover-scale mb-2" style="background-color: var(--button-primary); color: var(--text-inverse);">
+                                            <span class="mr-1">🔍</span>
+                                            <span id="modalSearchBtnText">${this.languageManager.get('search')}</span>
+                                        </button>
+                                        <button id="modalClearSearchBtn" class="w-full px-4 py-3 rounded text-sm transition-colors border-0 hover-scale" style="background-color: var(--button-secondary); color: var(--text-primary);">
+                                            <span class="mr-1">🗑️</span>
+                                            <span>${this.languageManager.get('clearSearch')}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Right Panel: Search Results -->
+                            <div class="search-right-panel">
+                                <search-results-viewer id="modalSearchResults"></search-results-viewer>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
             }
 
@@ -134,6 +214,18 @@
                 const languageToggle = this.shadowRoot.getElementById('languageToggle');
                 const themeToggle = this.shadowRoot.getElementById('themeToggle');
 
+                // Modal search elements
+                const modalCloseBtn = this.shadowRoot.getElementById('closeSearchModal');
+                const modalOverlay = this.shadowRoot.querySelector('.search-modal-overlay');
+                const modalSearchBtn = this.shadowRoot.getElementById('modalSearchBtn');
+                const modalClearSearchBtn = this.shadowRoot.getElementById('modalClearSearchBtn');
+                const modalSearchInput = this.shadowRoot.getElementById('modalSearchInput');
+                const modalCaseSensitiveCheck = this.shadowRoot.getElementById('modalCaseSensitiveCheck');
+                const modalUseRegexCheck = this.shadowRoot.getElementById('modalUseRegexCheck');
+                const modalIncludeFilenamesCheck = this.shadowRoot.getElementById('modalIncludeFilenamesCheck');
+                const modalSearchScopeCurrent = this.shadowRoot.getElementById('modalSearchScopeCurrent');
+                const modalSearchScopeAll = this.shadowRoot.getElementById('modalSearchScopeAll');
+
                 browseBtn.addEventListener('click', () => this.handleBrowse());
                 refreshBtn.addEventListener('click', () => this.handleRefresh());
                 expandBtn.addEventListener('click', () => this.handleExpandAll());
@@ -141,6 +233,36 @@
                 resetBtn.addEventListener('click', () => this.handleReset());
                 languageToggle.addEventListener('click', () => this.handleLanguageToggle());
                 themeToggle.addEventListener('click', () => this.handleThemeToggle());
+
+                // Modal event listeners
+                modalCloseBtn.addEventListener('click', () => this.closeSearchModal());
+                modalOverlay.addEventListener('click', () => this.closeSearchModal());
+
+                // Modal search event listeners
+                modalSearchBtn.addEventListener('click', () => this.handleModalSearch());
+                modalClearSearchBtn.addEventListener('click', () => this.handleClearSearch());
+                modalSearchInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') {
+                        this.handleModalSearch();
+                    }
+                });
+
+                // Modal search options listeners
+                modalCaseSensitiveCheck.addEventListener('change', () => this.updateModalSearchOptions());
+                modalUseRegexCheck.addEventListener('change', () => this.updateModalSearchOptions());
+                modalIncludeFilenamesCheck.addEventListener('change', () => this.updateModalSearchOptions());
+                modalSearchScopeCurrent.addEventListener('change', () => this.updateModalSearchOptions());
+                modalSearchScopeAll.addEventListener('change', () => this.updateModalSearchOptions());
+
+                // Close modal on Escape key
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        const modal = this.shadowRoot.getElementById('searchModal');
+                        if (modal && modal.style.display === 'flex') {
+                            this.closeSearchModal();
+                        }
+                    }
+                });
 
                 // Listen for language change events
                 document.addEventListener('languageChanged', () => {
@@ -150,6 +272,16 @@
                 // Listen for theme change events
                 document.addEventListener('themeChanged', (event) => {
                     this.handleThemeChanged(event.detail);
+                });
+
+                // Listen for search modal open event
+                document.addEventListener('openSearchModal', () => {
+                    this.openSearchModal();
+                });
+
+                // Listen for navigation events from search results
+                document.addEventListener('navigateToFile', (event) => {
+                    this.handleNavigateToFile(event.detail);
                 });
 
                 // Check browser support
@@ -346,6 +478,435 @@
 
                 // Update CSS variables in shadow DOM
                 this.updateThemeVariables(themeDetails.colors);
+            }
+
+            async handleNavigateToFile(details) {
+                try {
+                    console.log('Navigating to file:', details);
+
+                    // Close search modal first
+                    this.closeSearchModal();
+
+                    // Find the file in the file browser
+                    const fileBrowser = this.shadowRoot.querySelector('file-browser');
+                    if (fileBrowser && fileBrowser.dataManager) {
+                        const projectData = fileBrowser.dataManager.getProjectData();
+
+                        // Look for the file in all projects and track the project path
+                        let targetFile = null;
+                        let targetProjectPath = null;
+                        for (const [path, project] of Object.entries(projectData.projects)) {
+                            if (project.files) {
+                                targetFile = project.files.find(f => f.name === details.file);
+                                if (targetFile) {
+                                    targetProjectPath = path;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (targetFile && targetProjectPath) {
+                            console.log('Found file:', targetFile.name, 'in project:', targetProjectPath);
+
+                            // Expand the project tree to show the file
+                            await this.expandToFile(targetFile, targetProjectPath, fileBrowser);
+
+                            // Load the file content
+                            await fileBrowser.loadFileContent(targetFile);
+
+                            // Wait for the content to load, then navigate to the specific message
+                            setTimeout(() => {
+                                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                                console.log('Message viewer found:', !!messageViewer);
+                                console.log('Session ID:', details.sessionId, 'Message Index:', details.messageIndex);
+
+                                if (messageViewer && details.sessionId !== null && details.messageIndex !== null) {
+                                    // Find the session index in current file
+                                    const currentSessions = fileBrowser.dataManager.projectData.currentFileSessions;
+                                    const sessionIndex = currentSessions.indexOf(details.sessionId);
+
+                                    console.log('Current sessions:', currentSessions);
+                                    console.log('Target session index:', sessionIndex);
+
+                                    if (sessionIndex !== -1) {
+                                        // Switch to the correct session
+                                        fileBrowser.dataManager.setCurrentSessionIndex(sessionIndex);
+
+                                        // Show the session
+                                        const session = fileBrowser.dataManager.projectData.sessions[details.sessionId];
+                                        if (session) {
+                                            messageViewer.showSession(session);
+
+                                            // Navigate to the specific message after a short delay
+                                            setTimeout(() => {
+                                                // Highlight and scroll to the specific message
+                                                const messageElements = messageViewer.shadowRoot.querySelectorAll('[data-message-index]');
+                                                const targetMessageElement = Array.from(messageElements).find(
+                                                    el => parseInt(el.dataset.messageIndex) === details.messageIndex
+                                                );
+
+                                                if (targetMessageElement) {
+                                                    targetMessageElement.scrollIntoView({
+                                                        behavior: 'smooth',
+                                                        block: 'center'
+                                                    });
+
+                                                    // Add temporary highlight effect
+                                                    targetMessageElement.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                                    targetMessageElement.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                                                    setTimeout(() => {
+                                                        targetMessageElement.style.backgroundColor = '';
+                                                        targetMessageElement.style.border = '';
+                                                    }, 2000);
+                                                } else {
+                                                    console.warn('Target message element not found');
+                                                }
+                                            }, 300);
+                                        }
+                                    }
+                                } else {
+                                    console.warn('Cannot navigate: missing message viewer or session details');
+                                }
+                            }, 500); // Give time for the file to load
+                        } else {
+                            console.warn('File not found:', details.file);
+                            alert((this.languageManager.get('fileNotFound') || 'File not found') + ': ' + details.file);
+                        }
+                    } else {
+                        console.error('File browser not found');
+                    }
+                } catch (error) {
+                    console.error('Error navigating to file:', error);
+                    alert(this.languageManager.get('navigationError') || 'Error navigating to file');
+                }
+            }
+
+            async expandToFile(targetFile, projectPath, fileBrowser) {
+                try {
+                    console.log('Expanding to file:', targetFile.name, 'in project:', projectPath);
+
+                    // Find and expand the project that contains the target file
+                    const treeNodes = fileBrowser.shadowRoot.querySelectorAll('.claude-tree-node');
+                    let targetProjectNode = null;
+
+                    for (const node of treeNodes) {
+                        const nodePath = node.dataset.path;
+                        const nodeProjectName = node.dataset.projectName;
+                        console.log('Checking node:', nodePath, nodeProjectName);
+
+                        // Check if this node is our target project
+                        if (nodePath === projectPath || nodeProjectName === targetFile.projectName) {
+                            targetProjectNode = node;
+                            console.log('Found target project node');
+                            break;
+                        }
+                    }
+
+                    if (targetProjectNode) {
+                        // Expand the project
+                        const toggle = targetProjectNode.querySelector('.claude-tree-toggle');
+                        const children = targetProjectNode.querySelector('.claude-tree-children');
+
+                        if (toggle && children) {
+                            if (children.classList.contains('hidden')) {
+                                toggle.innerHTML = '<span class="text-xs">▼</span>';
+                                children.classList.remove('hidden');
+                                console.log('Expanded project node');
+                            }
+
+                            // Find and highlight the target file within this project
+                            const fileElements = children.querySelectorAll('[data-file-name]');
+                            let targetFileElement = null;
+
+                            for (const fileElement of fileElements) {
+                                console.log('Checking file:', fileElement.dataset.fileName);
+                                if (fileElement.dataset.fileName === targetFile.name) {
+                                    targetFileElement = fileElement.closest('.claude-file-item');
+                                    break;
+                                }
+                            }
+
+                            if (targetFileElement) {
+                                console.log('Found target file element');
+
+                                // Add selection state to the file
+                                fileBrowser.shadowRoot.querySelectorAll('.claude-file-item').forEach(item => {
+                                    if (item.classList.contains('claude-active-file')) {
+                                        // Reset styles by removing the class
+                                        item.classList.remove('claude-active-file');
+                                        item.style.backgroundColor = '';
+                                        item.style.border = '';
+                                    }
+                                });
+
+                                targetFileElement.classList.add('claude-active-file');
+
+                                // Add highlight effect
+                                targetFileElement.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                targetFileElement.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+
+                                // Scroll to view
+                                targetFileElement.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'center'
+                                });
+
+                                // Remove highlight after a delay but keep selection
+                                setTimeout(() => {
+                                    targetFileElement.style.backgroundColor = '';
+                                    targetFileElement.style.border = '';
+                                }, 3000);
+
+                                console.log('Successfully highlighted target file');
+                            } else {
+                                console.warn('Target file element not found in children');
+                                // Try global search as fallback
+                                const allFileElements = fileBrowser.shadowRoot.querySelectorAll('[data-file-name]');
+                                for (const fileElement of allFileElements) {
+                                    if (fileElement.dataset.fileName === targetFile.name) {
+                                        const parentFileItem = fileElement.closest('.claude-file-item');
+                                        if (parentFileItem) {
+                                            parentFileItem.classList.add('claude-active-file');
+                                            parentFileItem.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                            parentFileItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                            setTimeout(() => {
+                                                parentFileItem.style.backgroundColor = '';
+                                            }, 3000);
+                                            console.log('Found file via global search');
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        } else {
+                            console.error('Toggle or children not found in project node');
+                        }
+                    } else {
+                        console.error('Target project node not found');
+                    }
+                } catch (error) {
+                    console.error('Error expanding to file:', error);
+                }
+            }
+
+            // Search functionality methods
+            updateModalSearchOptions() {
+                const caseSensitive = this.shadowRoot.getElementById('modalCaseSensitiveCheck').checked;
+                const useRegex = this.shadowRoot.getElementById('modalUseRegexCheck').checked;
+                const includeFilenames = this.shadowRoot.getElementById('modalIncludeFilenamesCheck').checked;
+                const searchScope = this.shadowRoot.querySelector('input[name="modalSearchScope"]:checked').value;
+
+                window.searchManager.setSearchOptions({
+                    caseSensitive,
+                    useRegex,
+                    includeFilenames,
+                    searchScope
+                });
+            }
+
+            async handleModalSearch() {
+                const searchInput = this.shadowRoot.getElementById('modalSearchInput');
+                const searchBtn = this.shadowRoot.getElementById('modalSearchBtn');
+                const searchBtnText = this.shadowRoot.getElementById('modalSearchBtnText');
+                const searchTerm = searchInput.value.trim();
+
+                if (!searchTerm) {
+                    return;
+                }
+
+                // Update UI to show searching state
+                searchBtn.disabled = true;
+                searchBtnText.textContent = this.languageManager.get('searching');
+
+                try {
+                    // Update search options before searching
+                    this.updateModalSearchOptions();
+
+                    // Perform search
+                    const results = await window.searchManager.search(searchTerm);
+
+                    // Dispatch search updated event
+                    document.dispatchEvent(new CustomEvent('searchUpdated', {
+                        detail: { results, searchTerm }
+                    }));
+                } catch (error) {
+                    console.error('Search failed:', error);
+                } finally {
+                    // Restore UI state
+                    searchBtn.disabled = false;
+                    searchBtnText.textContent = this.languageManager.get('search');
+                }
+            }
+
+            // Modal styles
+            getModalStyles() {
+                return `
+                .search-modal {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    z-index: 1000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }
+
+                .search-modal-overlay {
+                    position: absolute;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background-color: rgba(0, 0, 0, 0.5);
+                    backdrop-filter: blur(4px);
+                }
+
+                .search-modal-content {
+                    position: relative;
+                    width: 90%;
+                    max-width: 1200px;
+                    height: 85vh;
+                    max-height: 85vh;
+                    background-color: var(--bg-primary);
+                    border-radius: 12px;
+                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+                    overflow: hidden;
+                    border: 1px solid var(--border-primary);
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .search-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 1rem 1.5rem;
+                    border-bottom: 1px solid var(--border-primary);
+                    background-color: var(--bg-secondary);
+                    flex-shrink: 0;
+                }
+
+                .search-modal-body {
+                    padding: 0;
+                    overflow: hidden;
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                }
+
+                .search-modal-layout {
+                    display: flex;
+                    height: 100%;
+                    overflow: hidden;
+                }
+
+                .search-left-panel {
+                    width: 350px;
+                    min-width: 350px;
+                    flex-shrink: 0;
+                    border-right: 1px solid var(--border-primary);
+                    background-color: var(--bg-secondary);
+                    overflow-y: auto;
+                }
+
+                .search-controls-container {
+                    padding: 1.5rem;
+                }
+
+                .search-right-panel {
+                    flex: 1;
+                    overflow: hidden;
+                    background-color: var(--bg-primary);
+                }
+
+                .space-y-3 > * + * {
+                    margin-top: 0.75rem;
+                }
+
+                .space-y-2 > * + * {
+                    margin-top: 0.5rem;
+                }
+
+                .search-modal-close:hover {
+                    color: var(--text-primary);
+                    background-color: var(--bg-tertiary);
+                    border-radius: 0.375rem;
+                }
+
+                .search-modal-close:focus {
+                    outline: 2px solid var(--button-primary);
+                    outline-offset: 2px;
+                }
+
+                @media (max-width: 768px) {
+                    .search-modal-content {
+                        width: 95%;
+                        height: 90vh;
+                        max-height: 90vh;
+                        margin: 1rem;
+                    }
+
+                    .search-modal-layout {
+                        flex-direction: column;
+                    }
+
+                    .search-left-panel {
+                        width: 100%;
+                        min-width: unset;
+                        border-right: none;
+                        border-bottom: 1px solid var(--border-primary);
+                        max-height: 50vh;
+                    }
+
+                    .search-right-panel {
+                        flex: 1;
+                        min-height: 0;
+                    }
+
+                    .search-modal-header {
+                        padding: 0.75rem 1rem;
+                    }
+
+                    .search-controls-container {
+                        padding: 1rem;
+                    }
+                }
+                `;
+            }
+
+        // Modal functionality
+            openSearchModal() {
+                const modal = this.shadowRoot.getElementById('searchModal');
+                modal.style.display = 'flex';
+                // Focus on input after modal opens
+                setTimeout(() => {
+                    const input = this.shadowRoot.getElementById('modalSearchInput');
+                    if (input) {
+                        input.focus();
+                    }
+                }, 100);
+            }
+
+            closeSearchModal() {
+                const modal = this.shadowRoot.getElementById('searchModal');
+                modal.style.display = 'none';
+            }
+
+            handleClearSearch() {
+                const searchInput = this.shadowRoot.getElementById('modalSearchInput');
+                if (searchInput) {
+                    searchInput.value = '';
+                }
+
+                // Clear search results
+                window.searchManager.clearSearch();
+
+                // Dispatch search updated event
+                document.dispatchEvent(new CustomEvent('searchUpdated', {
+                    detail: { results: [], searchTerm: '' }
+                }));
             }
 
             updateThemeVariables(colors) {
@@ -3053,7 +3614,13 @@
 
                 for (let i = 0; i < lines.length; i++) {
                     try {
-                        const jsonData = JSON.parse(lines[i]);
+                        // Skip lines that don't start with { or [ (likely not JSON)
+                        const line = lines[i].trim();
+                        if (!line.startsWith('{') && !line.startsWith('[')) {
+                            continue;
+                        }
+
+                        const jsonData = JSON.parse(line);
 
                         // Extract basic info
                         let sessionId = jsonData.sessionId;
@@ -3116,7 +3683,11 @@
                         currentFileSessionsData[sessionId].messages.push(message);
 
                     } catch (error) {
-                        console.error('parse JSON error  (line: ' + (i + 1) + '):', error);
+                        // Silently skip malformed JSON lines (likely debug logs)
+                        // Only log in development mode
+                        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                            console.debug('Skipping non-JSON line ' + (i + 1) + ':', lines[i]?.substring(0, 50) + '...');
+                        }
                     }
                 }
 
@@ -3249,6 +3820,273 @@
                     return date.toLocaleString();
                 }
             }
+
+            // Search all files method for DataManager to use
+            async searchInAllFilesDirectly(searchTerm, searchOptions) {
+                const results = [];
+
+                if (!this.directoryHandle) {
+                    console.warn('No directory handle available');
+                    return results;
+                }
+
+                // Get all projects and files
+                const allFiles = [];
+                Object.values(this.projectData.projects).forEach(project => {
+                    if (project.files && project.files.length > 0) {
+                        allFiles.push(...project.files);
+                    }
+                });
+
+                // Search through each file
+                for (const file of allFiles) {
+                    try {
+                        const fileObj = await file.handle.getFile();
+                        const content = await fileObj.text();
+                        const fileName = fileObj.name;
+
+                        // Find project for this file
+                        let projectPath = null;
+                        let projectName = null;
+                        for (const [path, project] of Object.entries(this.projectData.projects)) {
+                            if (project.files && project.files.some(f => f.name === fileName)) {
+                                projectPath = path;
+                                projectName = project.name || path;
+                                break;
+                            }
+                        }
+
+                        // Search in filename if enabled
+                        if (searchOptions.includeFilenames) {
+                            const filenameMatches = this.searchTextInContent(fileName, searchTerm, searchOptions);
+                            if (filenameMatches.length > 0) {
+                                results.push({
+                                    type: 'filename',
+                                    file: fileName,
+                                    filePath: projectPath,
+                                    projectName: projectName,
+                                    lastModified: file.lastModified,
+                                    matches: filenameMatches,
+                                    sessionId: null,
+                                    messageIndex: null,
+                                    content: fileName
+                                });
+                            }
+                        }
+
+                        // Parse and search in file content
+                        const sessions = await this.parseJSONLForSearch(content, fileName);
+                        for (const session of sessions) {
+                            if (!session.messages) continue;
+
+                            for (let i = 0; i < session.messages.length; i++) {
+                                const message = session.messages[i];
+                                const messageContent = this.extractMessageContentForSearch(message);
+
+                                if (messageContent && messageContent.length > 0) {
+                                    const contentMatches = this.searchTextInContent(messageContent, searchTerm, searchOptions);
+                                    if (contentMatches.length > 0) {
+                                        results.push({
+                                            type: 'content',
+                                            file: fileName,
+                                            filePath: projectPath,
+                                            projectName: projectName,
+                                            lastModified: file.lastModified,
+                                            matches: contentMatches,
+                                            sessionId: session.id,
+                                            sessionTitle: session.title || this.languageManager.get('unknownSession'),
+                                            messageIndex: i,
+                                            messageType: message.type || message.role || this.languageManager.get('unknownType'),
+                                            content: messageContent,
+                                            timestamp: message.timestamp || session.startTime
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error searching file:', file.name, error);
+                    }
+                }
+
+                return results;
+            }
+
+            // Helper method to parse JSONL for searching (lightweight version)
+            async parseJSONLForSearch(content, fileName) {
+                const lines = content.split('\n').filter(line => line.trim());
+                const sessions = [];
+
+                for (let i = 0; i < lines.length; i++) {
+                    try {
+                        // Skip lines that don't start with { or [ (likely not JSON)
+                        const line = lines[i].trim();
+                        if (!line.startsWith('{') && !line.startsWith('[')) {
+                            continue;
+                        }
+
+                        const jsonData = JSON.parse(line);
+
+                        // Extract basic info
+                        let sessionId = jsonData.sessionId;
+                        const timestamp = jsonData.timestamp;
+                        const type = jsonData.type;
+
+                        // Generate sessionId if not present
+                        if (!sessionId) {
+                            sessionId = fileName.replace(/\.[^/.]+$/, '');
+                        }
+
+                        // Find or create session
+                        let session = sessions.find(s => s.id === sessionId);
+                        if (!session) {
+                            session = {
+                                id: sessionId,
+                                messages: [],
+                                startTime: timestamp,
+                                endTime: timestamp
+                            };
+                            sessions.push(session);
+                        }
+
+                        // Update session time range
+                        if (timestamp < session.startTime) {
+                            session.startTime = timestamp;
+                        }
+                        if (timestamp > session.endTime) {
+                            session.endTime = timestamp;
+                        }
+
+                        // Create message object
+                        const message = {
+                            timestamp: timestamp,
+                            type: type,
+                            rawData: jsonData
+                        };
+
+                        // Extract content based on type using DataManager methods
+                        if (type === 'user') {
+                            message.role = 'user';
+                            message.content = this.extractUserContent(jsonData);
+                        } else if (type === 'assistant') {
+                            message.role = 'assistant';
+                            message.content = this.extractAssistantContent(jsonData);
+                        }
+
+                        // Add to session
+                        session.messages.push(message);
+
+                    } catch (error) {
+                        // Ignore parsing errors
+                    }
+                }
+
+                // Sort messages by time
+                sessions.forEach(session => {
+                    if (session.messages) {
+                        session.messages.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+                    }
+                });
+
+                return sessions;
+            }
+
+            // Helper method to extract message content for searching
+            extractMessageContentForSearch(message) {
+                const content = [];
+
+                // Main content
+                if (message.content) {
+                    if (typeof message.content === 'string') {
+                        content.push(message.content);
+                    } else if (Array.isArray(message.content)) {
+                        content.push(...message.content.map(item =>
+                            typeof item === 'string' ? item : (item.text || '')
+                        ));
+                    }
+                }
+
+                // Try to extract content from other possible fields
+                if (message.text) {
+                    content.push(message.text);
+                }
+
+                if (message.input) {
+                    if (typeof message.input === 'string') {
+                        content.push(message.input);
+                    } else if (typeof message.input === 'object') {
+                        content.push(JSON.stringify(message.input));
+                    }
+                }
+
+                // Tool calls and results
+                if (message.tool_calls) {
+                    message.tool_calls.forEach(toolCall => {
+                        if (toolCall.function && toolCall.function.name) {
+                            content.push(toolCall.function.name);
+                            if (toolCall.function.arguments) {
+                                content.push(toolCall.function.arguments);
+                            }
+                        }
+                    });
+                }
+
+                if (message.function_call) {
+                    if (message.function_call.name) {
+                        content.push(message.function_call.name);
+                    }
+                    if (message.function_call.arguments) {
+                        content.push(message.function_call.arguments);
+                    }
+                }
+
+                if (message.result && typeof message.result === 'string') {
+                    content.push(message.result);
+                } else if (message.result && typeof message.result === 'object') {
+                    content.push(JSON.stringify(message.result));
+                }
+
+                // Add message type/role as searchable content
+                if (message.type) {
+                    content.push(message.type);
+                }
+                if (message.role) {
+                    content.push(message.role);
+                }
+
+                return content.join(' ');
+            }
+
+            // Helper method to search text with options
+            searchTextInContent(text, searchTerm, searchOptions) {
+                const matches = [];
+
+                if (!text || !searchTerm) return matches;
+
+                let searchRegex;
+                try {
+                    if (searchOptions.useRegex) {
+                        searchRegex = new RegExp(searchTerm, searchOptions.caseSensitive ? 'g' : 'gi');
+                    } else {
+                        const pattern = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        searchRegex = new RegExp(pattern, searchOptions.caseSensitive ? 'g' : 'gi');
+                    }
+                } catch (error) {
+                    console.warn('Invalid search pattern:', error);
+                    return matches;
+                }
+
+                let match;
+                while ((match = searchRegex.exec(text)) !== null) {
+                    matches.push({
+                        text: match[0],
+                        index: match.index,
+                        length: match[0].length
+                    });
+                }
+
+                return matches;
+            }
         }
 
 
@@ -3270,6 +4108,22 @@
                 document.addEventListener('themeChanged', (event) => {
                     this.handleThemeChanged(event.detail);
                 });
+
+                // Add search button event listener
+                this.attachSearchButtonListener();
+            }
+
+            attachSearchButtonListener() {
+                // Use setTimeout to ensure the DOM is fully rendered
+                setTimeout(() => {
+                    const searchBtn = this.shadowRoot.getElementById('fileBrowserSearchBtn');
+                    if (searchBtn) {
+                        searchBtn.addEventListener('click', () => {
+                            // Dispatch event to parent app to open search modal
+                            document.dispatchEvent(new CustomEvent('openSearchModal'));
+                        });
+                    }
+                }, 100);
             }
 
             handleThemeChanged(themeDetails) {
@@ -3318,10 +4172,16 @@
                 ${this.styleManager.getFileBrowserStyles()}
             </style>
             <div class="claude-file-browser-container p-4 hidden" id="projectStructure">
-                <h2 class="text-lg font-semibold mb-3 flex items-center" style="color: var(--text-primary);">
-                    <span class="mr-2" style="color: var(--button-primary);">📊</span>
-                    <span id="projectStructureTitle">${this.languageManager.get('projectStructure')}</span>
-                </h2>
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold flex items-center" style="color: var(--text-primary);">
+                        <span class="mr-2" style="color: var(--button-primary);">📊</span>
+                        <span id="projectStructureTitle">${this.languageManager.get('projectStructure')}</span>
+                    </h2>
+                    <button id="fileBrowserSearchBtn" class="px-3 py-2 rounded text-sm transition-colors border-0 flex items-center hover-scale" style="background-color: var(--button-primary); color: var(--text-inverse);">
+                        <span class="mr-1">🔍</span>
+                        <span>${this.languageManager.get('search')}</span>
+                    </button>
+                </div>
                 <div id="fileTree" class="claude-file-tree">
                     <!-- File tree will be dynamically generated -->
                 </div>
@@ -3383,6 +4243,8 @@
             createProjectElement(project) {
                 const element = document.createElement('div');
                 element.className = 'claude-tree-node';
+                element.setAttribute('data-path', project.path);
+                element.setAttribute('data-project-name', project.name || 'unnamed');
 
                 const projectHeader = document.createElement('div');
                 projectHeader.className = 'flex items-center py-1 cursor-pointer';
@@ -3575,7 +4437,13 @@
 
                 for (let i = 0; i < lines.length; i++) {
                     try {
-                        const jsonData = JSON.parse(lines[i]);
+                        // Skip lines that don't start with { or [ (likely not JSON)
+                        const line = lines[i].trim();
+                        if (!line.startsWith('{') && !line.startsWith('[')) {
+                            continue;
+                        }
+
+                        const jsonData = JSON.parse(line);
 
                         // Extract basic info
                         let sessionId = jsonData.sessionId;
@@ -3627,8 +4495,11 @@
                         session.messages.push(message);
 
                     } catch (error) {
-                        // Ignore parsing errors
-                        console.error('parseJSONLForPreview error (line: ' + (i + 1) + '):', error);
+                        // Silently skip malformed JSON lines (likely debug logs)
+                        // Only log in development mode
+                        if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                            console.debug('parseJSONLForPreview skipping line ' + (i + 1) + ':', lines[i]?.substring(0, 50) + '...');
+                        }
                     }
                 }
 
@@ -3664,7 +4535,7 @@
                             previewText = previewText.substring(0, 100) + '...';
                         }
 
-                        previewElement.textContent = previewText;
+                        previewElement.textContent = `(${firstSession.messages.length})` + previewText;
                         previewElement.classList.remove('text-gray-500');
                         previewElement.classList.add('text-gray-600');
                     } else {
@@ -3986,7 +4857,9 @@
                 </div>
             `;
                 } else {
-                    session.messages.forEach(message => {
+                    session.messages.forEach((message, index) => {
+                        // Add index to message for navigation
+                        message.index = index;
                         const messageElement = this.createMessageElement(message);
                         messagesContainer.appendChild(messageElement);
                     });
@@ -4003,6 +4876,11 @@
 
             createMessageElement(message) {
                 const messageElement = document.createElement('div');
+
+                // Add message index for navigation
+                if (message.index !== undefined) {
+                    messageElement.setAttribute('data-message-index', message.index);
+                }
 
                 if (message.role === 'user') {
                     messageElement.className = 'message-user p-3 rounded-lg';
@@ -4838,7 +5716,33 @@
                         'readFileError': '无法读取文件',
                         'resetConfirmation': '确定要重置应用吗？这将清除当前选择的文件夹和所有数据。',
                         'browserNotSupported': '您的浏览器不支持文件系统访问API。请使用Chrome 86+或Edge 86+版本。',
-                        'browserNotSupportedButton': '不支持'
+                        'browserNotSupportedButton': '不支持',
+
+                        // Search functionality
+                        'search': '搜索',
+                        'searchPlaceholder': '搜索对话内容...',
+                        'searching': '搜索中...',
+                        'searchResults': '搜索结果',
+                        'noSearchResults': '未找到匹配结果',
+                        'searchInFile': '在文件中搜索',
+                        'searchInProject': '在项目中搜索',
+                        'searchOptions': '搜索选项',
+                        'caseSensitive': '区分大小写',
+                        'useRegex': '使用正则表达式',
+                        'includeFilenames': '包含文件名',
+                        'searchScope': '搜索范围',
+                        'searchAllFiles': '所有文件',
+                        'searchCurrentFile': '当前文件',
+                        'matchesFound': '个匹配结果',
+                        'fileMatches': '文件匹配：',
+                        'contentMatches': '内容匹配：',
+                        'clearSearch': '清除搜索',
+                        'searchNavigation': '搜索导航',
+                        'previousMatch': '上一个匹配',
+                        'nextMatch': '下一个匹配',
+                        'jumpToMatch': '跳转到匹配项',
+                        'navigateToFile': '导航到：',
+                        'openFile': '打开文件并跳转到匹配'
                     },
                     'en': {
                         // App title
@@ -4937,7 +5841,33 @@
                         'readFileError': 'Unable to read file',
                         'resetConfirmation': 'Are you sure you want to reset the application? This will clear the currently selected folder and all data.',
                         'browserNotSupported': 'Your browser does not support the File System Access API. Please use Chrome 86+ or Edge 86+.',
-                        'browserNotSupportedButton': 'Not Supported'
+                        'browserNotSupportedButton': 'Not Supported',
+
+                        // Search functionality
+                        'search': 'Search',
+                        'searchPlaceholder': 'Search conversation content...',
+                        'searching': 'Searching...',
+                        'searchResults': 'Search Results',
+                        'noSearchResults': 'No matches found',
+                        'searchInFile': 'Search in File',
+                        'searchInProject': 'Search in Project',
+                        'searchOptions': 'Search Options',
+                        'caseSensitive': 'Case Sensitive',
+                        'useRegex': 'Use Regex',
+                        'includeFilenames': 'Include Filenames',
+                        'searchScope': 'Search Scope',
+                        'searchAllFiles': 'All Files',
+                        'searchCurrentFile': 'Current File',
+                        'matchesFound': 'matches found',
+                        'fileMatches': 'File matches:',
+                        'contentMatches': 'Content matches:',
+                        'clearSearch': 'Clear Search',
+                        'searchNavigation': 'Search Navigation',
+                        'previousMatch': 'Previous Match',
+                        'nextMatch': 'Next Match',
+                        'jumpToMatch': 'Jump to Match',
+                        'navigateToFile': 'Navigate to:',
+                        'openFile': 'Open File & Go to Match'
                     }
                 };
             }
@@ -4984,10 +5914,729 @@
             }
         }
 
+        // Search functionality manager
+        class SearchManager {
+            constructor() {
+                this.searchResults = [];
+                this.currentSearchTerm = '';
+                this.searchOptions = {
+                    caseSensitive: false,
+                    useRegex: false,
+                    includeFilenames: true,
+                    searchScope: 'all' // 'current' or 'all'
+                };
+                this.isSearching = false;
+                this.languageManager = window.languageManager;
+                this.dataManager = window.dataManager;
+            }
+
+            // Search options management
+            setSearchOptions(options) {
+                this.searchOptions = { ...this.searchOptions, ...options };
+            }
+
+            getSearchOptions() {
+                return { ...this.searchOptions };
+            }
+
+            // Main search function
+            async search(searchTerm) {
+                if (!searchTerm || searchTerm.trim() === '') {
+                    this.clearSearch();
+                    return [];
+                }
+
+                this.isSearching = true;
+                this.currentSearchTerm = searchTerm.trim();
+                this.searchResults = [];
+
+                try {
+                    if (this.searchOptions.searchScope === 'current') {
+                        this.searchResults = await this.searchInCurrentFile();
+                    } else {
+                        this.searchResults = await this.searchInAllFiles();
+                    }
+                } catch (error) {
+                    console.error('Search error:', error);
+                    this.searchResults = [];
+                } finally {
+                    this.isSearching = false;
+                }
+
+                return this.searchResults;
+            }
+
+            // Search in current file
+            async searchInCurrentFile() {
+                const projectData = this.dataManager.getProjectData();
+                const currentFile = projectData.currentFile;
+
+                console.log('Debug - Current file:', currentFile);
+                console.log('Debug - Current file sessions:', projectData.currentFileSessions);
+                console.log('Debug - Total sessions available:', Object.keys(projectData.sessions).length);
+
+                if (!currentFile) {
+                    console.warn('No current file loaded');
+                    return [];
+                }
+
+                const results = [];
+
+                // Search in filename if enabled
+                if (this.searchOptions.includeFilenames) {
+                    const filenameMatches = this.searchInText(currentFile, this.currentSearchTerm);
+                    if (filenameMatches.length > 0) {
+                        results.push({
+                            type: 'filename',
+                            file: currentFile,
+                            matches: filenameMatches,
+                            sessionId: null,
+                            messageIndex: null,
+                            content: currentFile
+                        });
+                    }
+                }
+
+                // Search in file content using DataManager's session data
+                const sessionIds = projectData.currentFileSessions || [];
+                console.log('Debug - Session IDs for current file:', sessionIds.length);
+
+                for (const sessionId of sessionIds) {
+                    const session = projectData.sessions[sessionId];
+                    if (!session || !session.messages) {
+                        console.warn('No session or messages for:', sessionId);
+                        continue;
+                    }
+
+                    console.log('Debug - Processing session:', sessionId, 'Messages:', session.messages.length);
+
+                    for (let i = 0; i < session.messages.length; i++) {
+                        const message = session.messages[i];
+                        const content = this.extractMessageContent(message);
+
+                        if (content && content.length > 0) {
+                            const contentMatches = this.searchInText(content, this.currentSearchTerm);
+                            if (contentMatches.length > 0) {
+                                results.push({
+                                    type: 'content',
+                                    file: currentFile,
+                                    matches: contentMatches,
+                                    sessionId: sessionId,
+                                    sessionTitle: session.title || this.languageManager.get('unknownSession'),
+                                    messageIndex: i,
+                                    messageType: message.type || message.role || this.languageManager.get('unknownType'),
+                                    content: content
+                                });
+                            }
+                        }
+                    }
+                }
+
+                console.log('Debug - Total results found in current file:', results.length);
+                return results;
+            }
+
+            // Search in all files
+            async searchInAllFiles() {
+                const results = [];
+
+                console.log('Debug - Searching in all files using DataManager');
+
+                try {
+                    // Use DataManager's new method to search all files directly
+                    results.push(...await this.dataManager.searchInAllFilesDirectly(this.currentSearchTerm, this.searchOptions));
+                } catch (error) {
+                    console.error('Error searching all files:', error);
+                }
+
+                console.log('Debug - Total results found in all files:', results.length);
+                return results;
+            }
+
+            // Search in text with options
+            searchInText(text, searchTerm) {
+                const matches = [];
+                const searchRegex = this.createSearchRegex(searchTerm);
+
+                if (!searchRegex) return matches;
+
+                let match;
+                while ((match = searchRegex.exec(text)) !== null) {
+                    matches.push({
+                        text: match[0],
+                        index: match.index,
+                        length: match[0].length
+                    });
+                }
+
+                return matches;
+            }
+
+            // Create search regex based on options
+            createSearchRegex(searchTerm) {
+                try {
+                    let pattern;
+
+                    if (this.searchOptions.useRegex) {
+                        pattern = searchTerm;
+                    } else {
+                        pattern = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    }
+
+                    const flags = this.searchOptions.caseSensitive ? 'g' : 'gi';
+                    return new RegExp(pattern, flags);
+                } catch (error) {
+                    console.warn('Invalid search pattern:', error);
+                    return null;
+                }
+            }
+
+  
+            // Extract message content for searching
+            extractMessageContent(message) {
+                const content = [];
+
+                // Main content
+                if (message.content) {
+                    if (typeof message.content === 'string') {
+                        content.push(message.content);
+                    } else if (Array.isArray(message.content)) {
+                        content.push(...message.content.map(item =>
+                            typeof item === 'string' ? item : (item.text || '')
+                        ));
+                    }
+                }
+
+                // Try to extract content from other possible fields
+                if (message.text) {
+                    content.push(message.text);
+                }
+
+                if (message.input) {
+                    if (typeof message.input === 'string') {
+                        content.push(message.input);
+                    } else if (typeof message.input === 'object') {
+                        content.push(JSON.stringify(message.input));
+                    }
+                }
+
+                // Tool calls and results
+                if (message.tool_calls) {
+                    message.tool_calls.forEach(toolCall => {
+                        if (toolCall.function && toolCall.function.name) {
+                            content.push(toolCall.function.name);
+                            if (toolCall.function.arguments) {
+                                content.push(toolCall.function.arguments);
+                            }
+                        }
+                    });
+                }
+
+                if (message.function_call) {
+                    if (message.function_call.name) {
+                        content.push(message.function_call.name);
+                    }
+                    if (message.function_call.arguments) {
+                        content.push(message.function_call.arguments);
+                    }
+                }
+
+                if (message.result && typeof message.result === 'string') {
+                    content.push(message.result);
+                }
+
+                if (message.output) {
+                    content.push(message.output);
+                }
+
+                // Try to get content from assistant/role fields
+                if (message.assistant) {
+                    if (typeof message.assistant === 'string') {
+                        content.push(message.assistant);
+                    } else if (message.assistant.content) {
+                        content.push(message.assistant.content);
+                    }
+                }
+
+                // Add message type/role as searchable content
+                if (message.type) {
+                    content.push(message.type);
+                }
+                if (message.role) {
+                    content.push(message.role);
+                }
+
+                // If no specific content found, stringify the whole message as fallback
+                if (content.length === 0) {
+                    const messageStr = JSON.stringify(message);
+                    if (messageStr && messageStr.length > 2) { // Not empty object
+                        content.push(messageStr);
+                    }
+                }
+
+                const result = content.join(' ').trim();
+                console.log('Debug - Extracted content length:', result.length, 'from message keys:', Object.keys(message));
+                return result;
+            }
+
+            // Note: File handling methods removed - we now use DataManager's session data directly
+
+            // Note: parseSessions removed - we now use DataManager's session data directly
+
+            // Clear search results
+            clearSearch() {
+                this.searchResults = [];
+                this.currentSearchTerm = '';
+                this.isSearching = false;
+            }
+
+            // Get search results
+            getSearchResults() {
+                return [...this.searchResults];
+            }
+
+            // Get current search state
+            getSearchState() {
+                return {
+                    isSearching: this.isSearching,
+                    searchTerm: this.currentSearchTerm,
+                    resultCount: this.searchResults.length,
+                    options: { ...this.searchOptions }
+                };
+            }
+
+            // Navigate to search result
+            async navigateToResult(result) {
+                if (result.type === 'content' && result.sessionId && (result.file || result.filePath)) {
+                    // Load the file if not already loaded
+                    const projectData = this.dataManager.getProjectData();
+                    const fileName = result.file || result.filePath;
+
+                    if (projectData.currentFile !== fileName) {
+                        // This would need to be implemented in DataManager
+                        // For now, we'll dispatch an event
+                        document.dispatchEvent(new CustomEvent('navigateToFile', {
+                            detail: {
+                                file: fileName,
+                                sessionId: result.sessionId,
+                                messageIndex: result.messageIndex,
+                                filePath: result.filePath
+                            }
+                        }));
+                    } else {
+                        // Navigate to the specific message
+                        document.dispatchEvent(new CustomEvent('navigateToMessage', {
+                            detail: { sessionId: result.sessionId, messageIndex: result.messageIndex }
+                        }));
+                    }
+                }
+            }
+        }
+
         // Initialize managers
         window.languageManager = new LanguageManager();
         window.dataManager = new DataManager();
         window.styleManager = new StyleManager();
+        window.searchManager = new SearchManager();
+
+        // Search Results Viewer Component
+        class SearchResultsViewer extends HTMLElement {
+            constructor() {
+                super();
+                this.searchManager = window.searchManager;
+                this.dataManager = window.dataManager;
+                this.languageManager = window.languageManager;
+                this.styleManager = window.styleManager;
+                this.currentResults = [];
+                this.selectedResultIndex = -1;
+                this.attachShadow({ mode: 'open' });
+            }
+
+            connectedCallback() {
+                this.render();
+                this.attachEventListeners();
+            }
+
+            render() {
+                this.shadowRoot.innerHTML = `
+            <style>
+                ${this.styleManager.generateTailwindStyles()}
+                ${this.getSearchResultsStyles()}
+            </style>
+            <div class="search-results-container" style="height: 100%; display: flex; flex-direction: column;">
+                <div class="search-results-header" style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-primary); flex-shrink: 0;">
+                    <h3 class="search-results-title" style="color: var(--text-primary); font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem;">
+                        🔍 ${this.languageManager.get('searchResults')}
+                    </h3>
+                    <div class="search-results-info" style="color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 0.5rem;">
+                        ${this.getResultsInfo()}
+                    </div>
+                </div>
+
+                <div class="search-results-list" style="flex: 1; overflow-y: auto; padding: 0.5rem 1.5rem 1rem 1.5rem;">
+                    ${this.renderResults()}
+                </div>
+            </div>
+        `;
+            }
+
+            getSearchResultsStyles() {
+                return `
+                .search-result-item {
+                    padding: 0.75rem;
+                    border-bottom: 1px solid var(--border-primary);
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                }
+
+                .search-result-item:hover {
+                    background-color: var(--bg-secondary);
+                }
+
+                .search-result-item.selected {
+                    background-color: var(--bg-tertiary);
+                    border-left: 3px solid var(--button-primary);
+                }
+
+                .search-result-type {
+                    display: inline-block;
+                    padding: 0.125rem 0.375rem;
+                    border-radius: 0.25rem;
+                    font-size: 0.75rem;
+                    font-weight: 500;
+                    margin-right: 0.5rem;
+                }
+
+                .search-result-type.filename {
+                    background-color: var(--button-secondary);
+                    color: var(--text-primary);
+                }
+
+                .search-result-type.content {
+                    background-color: var(--button-primary);
+                    color: var(--text-inverse);
+                }
+
+                .search-result-file {
+                    font-weight: 500;
+                    color: var(--text-primary);
+                    margin-bottom: 0.25rem;
+                }
+
+                .search-result-session {
+                    font-size: 0.875rem;
+                    color: var(--text-secondary);
+                    margin-bottom: 0.25rem;
+                }
+
+                .search-result-context {
+                    font-size: 0.875rem;
+                    color: var(--text-primary);
+                    line-height: 1.4;
+                    margin-top: 0.5rem;
+                    padding: 0.5rem;
+                    background-color: var(--bg-secondary);
+                    border-radius: 0.375rem;
+                    border-left: 3px solid var(--button-primary);
+                }
+
+                .search-highlight {
+                    background-color: #fef3c7;
+                    color: #92400e;
+                    padding: 0.0625rem 0.125rem;
+                    border-radius: 0.125rem;
+                    font-weight: 500;
+                }
+
+                /* Dark theme support for search highlight */
+                @media (prefers-color-scheme: dark) {
+                    .search-highlight {
+                        background-color: #92400e;
+                        color: #fef3c7;
+                    }
+                }
+
+                .search-navigation {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 0.75rem;
+                    border-top: 1px solid var(--border-primary);
+                    background-color: var(--bg-secondary);
+                }
+
+                .search-nav-buttons {
+                    display: flex;
+                    gap: 0.5rem;
+                }
+
+                .search-nav-button {
+                    padding: 0.375rem 0.75rem;
+                    border-radius: 0.375rem;
+                    font-size: 0.875rem;
+                    border: 1px solid var(--border-primary);
+                    background-color: var(--bg-primary);
+                    color: var(--text-primary);
+                    cursor: pointer;
+                    transition: all 0.2s;
+                }
+
+                .search-nav-button:hover:not(:disabled) {
+                    background-color: var(--button-primary);
+                    color: var(--text-inverse);
+                    border-color: var(--button-primary);
+                }
+
+                .search-nav-button:disabled {
+                    opacity: 0.5;
+                    cursor: not-allowed;
+                }
+
+                .search-nav-info {
+                    font-size: 0.875rem;
+                    color: var(--text-secondary);
+                }
+
+                .navigate-btn:hover {
+                    background-color: var(--button-hover) !important;
+                    transform: translateY(-1px);
+                    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                }
+
+                .navigate-btn:active {
+                    transform: translateY(0);
+                    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                }
+                `;
+            }
+
+            getResultsInfo() {
+                if (this.searchManager.isSearching) {
+                    return `${this.languageManager.get('searching')}...`;
+                }
+
+                const totalMatches = this.currentResults.reduce((sum, result) => sum + result.matches.length, 0);
+                const fileCount = new Set(this.currentResults.map(r => r.file)).size;
+
+                if (this.currentResults.length === 0) {
+                    return this.languageManager.get('noSearchResults');
+                }
+
+                return `${fileCount} ${this.languageManager.get('fileMatches')} ${totalMatches} ${this.languageManager.get('matchesFound')}`;
+            }
+
+            renderResults() {
+                if (this.currentResults.length === 0) {
+                    return `
+                    <div class="no-results" style="padding: 2rem; text-align: center; color: var(--text-secondary);">
+                        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔍</div>
+                        <div>${this.languageManager.get('noSearchResults')}</div>
+                    </div>
+                `;
+                }
+
+                return this.currentResults.map((result, index) => this.renderResult(result, index)).join('');
+            }
+
+            renderResult(result, index) {
+                const isSelected = index === this.selectedResultIndex;
+                const typeClass = result.type;
+                const typeLabel = result.type === 'filename' ?
+                    this.languageManager.get('fileName') :
+                    this.languageManager.get('content');
+
+                // Format date
+                let dateInfo = '';
+                if (result.lastModified) {
+                    const date = new Date(result.lastModified);
+                    dateInfo = this.formatDate(date);
+                } else if (result.timestamp) {
+                    const date = new Date(result.timestamp);
+                    dateInfo = this.formatDate(date);
+                }
+
+                return `
+                <div class="search-result-item ${isSelected ? 'selected' : ''}" data-index="${index}" style="cursor: pointer;">
+                    <div class="search-result-header">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
+                            <span class="search-result-type ${typeClass}">${typeLabel}</span>
+                            ${dateInfo ? `<div style="font-size: 0.75rem; color: var(--text-tertiary); white-space: nowrap;">${dateInfo}</div>` : ''}
+                        </div>
+                        <div class="search-result-file">${result.file}</div>
+                        ${result.projectName ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">📁 ${result.projectName}</div>` : ''}
+                        ${result.sessionTitle ? `<div class="search-result-session">${result.sessionTitle}</div>` : ''}
+                        ${result.messageType ? `<div style="font-size: 0.75rem; color: var(--text-tertiary);">${result.messageType}</div>` : ''}
+                    </div>
+                    ${result.matches.length > 0 ? this.renderResultContext(result) : ''}
+                    ${isSelected ? this.renderNavigationOptions(result) : ''}
+                </div>
+                `;
+            }
+
+            formatDate(date) {
+                if (!date) return '';
+
+                const now = new Date();
+                const diffMs = now - date;
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                const diffWeeks = Math.floor(diffDays / 7);
+
+                if (diffDays === 0) {
+                    return this.languageManager.get('today') + ' ' + date.toLocaleTimeString({ hour: '2-digit', minute: '2-digit' });
+                } else if (diffDays === 1) {
+                    return this.languageManager.get('yesterday') + ' ' + date.toLocaleTimeString({ hour: '2-digit', minute: '2-digit' });
+                } else if (diffDays >= 2 && diffDays <= 6) {
+                    return `${diffDays}${this.languageManager.get('daysAgo')}`;
+                } else if (diffWeeks === 1) {
+                    return this.languageManager.get('lastWeek');
+                } else if (diffWeeks >= 2 && diffWeeks <= 3) {
+                    return `${diffWeeks}${this.languageManager.get('weeksAgo')}`;
+                } else {
+                    return date.toLocaleDateString();
+                }
+            }
+
+            renderResultContext(result) {
+                const match = result.matches[0]; // Show first match as preview
+                const context = this.getContextAroundMatch(result.content, match.index, match.length);
+
+                return `
+                <div class="search-result-context">
+                    ${this.highlightSearchTerm(context)}
+                </div>
+                `;
+            }
+
+            renderNavigationOptions(result) {
+                return `
+                <div class="search-navigation-options" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                        ${this.languageManager.get('navigateToFile') || 'Navigate to:'}
+                    </div>
+                    <button class="navigate-btn" data-result-index="${this.currentResults.indexOf(result)}"
+                            style="background-color: var(--button-primary); color: var(--text-inverse);
+                                   border: none; padding: 0.5rem 1rem; border-radius: 0.375rem;
+                                   font-size: 0.8rem; cursor: pointer; transition: all 0.2s ease;
+                                   display: flex; align-items: center; gap: 0.5rem;">
+                        <span>📄</span>
+                        <span>${this.languageManager.get('openFile') || 'Open File & Go to Match'}</span>
+                    </button>
+                </div>
+                `;
+            }
+
+            getContextAroundMatch(content, matchIndex, matchLength, contextLength = 100) {
+                const start = Math.max(0, matchIndex - contextLength);
+                const end = Math.min(content.length, matchIndex + matchLength + contextLength);
+
+                let context = content.substring(start, end);
+
+                if (start > 0) {
+                    context = '...' + context;
+                }
+                if (end < content.length) {
+                    context = context + '...';
+                }
+
+                return context;
+            }
+
+            highlightSearchTerm(text) {
+                if (!this.searchManager.currentSearchTerm) return text;
+
+                try {
+                    const regex = this.searchManager.createSearchRegex(this.searchManager.currentSearchTerm);
+                    return text.replace(regex, match => `<span class="search-highlight">${match}</span>`);
+                } catch (error) {
+                    return text;
+                }
+            }
+
+            renderNavigation() {
+                return `
+                <div class="search-navigation">
+                    <div class="search-nav-buttons">
+                        <button class="search-nav-button" id="prevResult" ${this.selectedResultIndex <= 0 ? 'disabled' : ''}>
+                            ↑ ${this.languageManager.get('previousMatch')}
+                        </button>
+                        <button class="search-nav-button" id="nextResult" ${this.selectedResultIndex >= this.currentResults.length - 1 ? 'disabled' : ''}>
+                            ${this.languageManager.get('nextMatch')} ↓
+                        </button>
+                    </div>
+                    <div class="search-nav-info">
+                        ${this.selectedResultIndex >= 0 ?
+                            `${this.selectedResultIndex + 1} / ${this.currentResults.length}` :
+                            this.languageManager.get('searchNavigation')
+                        }
+                    </div>
+                </div>
+                `;
+            }
+
+            attachEventListeners() {
+                // Result item clicks for selection
+                this.shadowRoot.addEventListener('click', (e) => {
+                    const resultItem = e.target.closest('.search-result-item');
+                    if (resultItem) {
+                        const index = parseInt(resultItem.dataset.index);
+                        this.selectResult(index);
+                    }
+
+                    // Navigation button clicks
+                    const navigateBtn = e.target.closest('.navigate-btn');
+                    if (navigateBtn) {
+                        const resultIndex = parseInt(navigateBtn.dataset.resultIndex);
+                        this.navigateToResult(resultIndex);
+                    }
+                });
+
+                // Listen for search updates
+                document.addEventListener('searchUpdated', () => {
+                    this.updateResults();
+                });
+            }
+
+            updateResults() {
+                this.currentResults = this.searchManager.getSearchResults();
+                this.selectedResultIndex = this.currentResults.length > 0 ? 0 : -1;
+                this.render();
+            }
+
+            selectResult(index) {
+                this.selectedResultIndex = index;
+                this.render();
+                this.scrollToResult(index);
+            }
+
+            selectPreviousResult() {
+                if (this.selectedResultIndex > 0) {
+                    this.selectResult(this.selectedResultIndex - 1);
+                }
+            }
+
+            selectNextResult() {
+                if (this.selectedResultIndex < this.currentResults.length - 1) {
+                    this.selectResult(this.selectedResultIndex + 1);
+                }
+            }
+
+            scrollToResult(index) {
+                const resultItems = this.shadowRoot.querySelectorAll('.search-result-item');
+                if (resultItems[index]) {
+                    resultItems[index].scrollIntoView({
+                        block: 'nearest',
+                        behavior: 'smooth'
+                    });
+                }
+            }
+
+            async navigateToResult(index) {
+                if (index >= 0 && index < this.currentResults.length) {
+                    const result = this.currentResults[index];
+                    await this.searchManager.navigateToResult(result);
+                }
+            }
+        }
 
         // Initialize theme globally
         window.styleManager.initializeTheme();
@@ -4996,6 +6645,7 @@
         customElements.define('claude-history-app', ClaudeCodeHistoryApp);
         customElements.define('file-browser', FileBrowser);
         customElements.define('message-viewer', MessageViewer);
+        customElements.define('search-results-viewer', SearchResultsViewer);
     </script>
 </body>
 
