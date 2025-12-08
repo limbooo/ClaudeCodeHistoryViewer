@@ -284,6 +284,16 @@
                     this.handleNavigateToFile(event.detail);
                 });
 
+                // Listen for message navigation events (for current file searches)
+                document.addEventListener('navigateToMessage', (event) => {
+                    this.handleNavigateToMessage(event.detail);
+                });
+
+                // Listen for close search modal events
+                document.addEventListener('closeSearchModal', () => {
+                    this.closeSearchModal();
+                });
+
                 // Check browser support
                 if (!('showDirectoryPicker' in window)) {
                     this.showBrowserNotSupported();
@@ -495,78 +505,64 @@
                         // Look for the file in all projects and track the project path
                         let targetFile = null;
                         let targetProjectPath = null;
+                        let projectName = null;
+
+                        console.log('Searching for file:', details.file);
+                        console.log('Available projects:', Object.keys(projectData.projects));
+
                         for (const [path, project] of Object.entries(projectData.projects)) {
                             if (project.files) {
                                 targetFile = project.files.find(f => f.name === details.file);
                                 if (targetFile) {
                                     targetProjectPath = path;
+                                    projectName = project.name || path;
+                                    console.log('Found file in project:', path, 'with name:', projectName);
                                     break;
                                 }
                             }
                         }
 
-                        if (targetFile && targetProjectPath) {
-                            console.log('Found file:', targetFile.name, 'in project:', targetProjectPath);
+                        // If not found in project data, try to create a minimal file object for navigation
+                        if (!targetFile && details.file) {
+                            console.log('File not found in project data, creating minimal file object');
+                            targetFile = {
+                                name: details.file,
+                                handle: null,
+                                projectName: details.projectName,
+                                lastModified: details.lastModified || Date.now()
+                            };
+                            targetProjectPath = details.filePath || 'unknown';
+                            projectName = details.projectName || 'Unknown Project';
+                        }
 
-                            // Expand the project tree to show the file
-                            await this.expandToFile(targetFile, targetProjectPath, fileBrowser);
+                        if (targetFile) {
+                            console.log('Processing file:', targetFile.name, 'in project:', targetProjectPath);
 
-                            // Load the file content
-                            await fileBrowser.loadFileContent(targetFile);
+                            // Expand the project tree to show the file (only if we have a valid project path)
+                            if (targetProjectPath && targetProjectPath !== 'unknown') {
+                                await this.expandToFile(targetFile, targetProjectPath, fileBrowser);
+                            }
+
+                            // Load the file content (only if we have a valid file handle)
+                            if (targetFile.handle) {
+                                await fileBrowser.loadFileContent(targetFile);
+                            } else {
+                                console.log('No file handle available, using current loaded content');
+                                // File is already loaded, just navigate to the message
+                                const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                                if (messageViewer && details.sessionId !== null && details.messageIndex !== null) {
+                                    this.navigateToSpecificMessage(messageViewer, details);
+                                }
+                                return;
+                            }
 
                             // Wait for the content to load, then navigate to the specific message
                             setTimeout(() => {
-                                const messageViewer = this.shadowRoot.querySelector('message-viewer');
-                                console.log('Message viewer found:', !!messageViewer);
-                                console.log('Session ID:', details.sessionId, 'Message Index:', details.messageIndex);
-
-                                if (messageViewer && details.sessionId !== null && details.messageIndex !== null) {
-                                    // Find the session index in current file
-                                    const currentSessions = fileBrowser.dataManager.projectData.currentFileSessions;
-                                    const sessionIndex = currentSessions.indexOf(details.sessionId);
-
-                                    console.log('Current sessions:', currentSessions);
-                                    console.log('Target session index:', sessionIndex);
-
-                                    if (sessionIndex !== -1) {
-                                        // Switch to the correct session
-                                        fileBrowser.dataManager.setCurrentSessionIndex(sessionIndex);
-
-                                        // Show the session
-                                        const session = fileBrowser.dataManager.projectData.sessions[details.sessionId];
-                                        if (session) {
-                                            messageViewer.showSession(session);
-
-                                            // Navigate to the specific message after a short delay
-                                            setTimeout(() => {
-                                                // Highlight and scroll to the specific message
-                                                const messageElements = messageViewer.shadowRoot.querySelectorAll('[data-message-index]');
-                                                const targetMessageElement = Array.from(messageElements).find(
-                                                    el => parseInt(el.dataset.messageIndex) === details.messageIndex
-                                                );
-
-                                                if (targetMessageElement) {
-                                                    targetMessageElement.scrollIntoView({
-                                                        behavior: 'smooth',
-                                                        block: 'center'
-                                                    });
-
-                                                    // Add temporary highlight effect
-                                                    targetMessageElement.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
-                                                    targetMessageElement.style.border = '1px solid rgba(59, 130, 246, 0.3)';
-                                                    setTimeout(() => {
-                                                        targetMessageElement.style.backgroundColor = '';
-                                                        targetMessageElement.style.border = '';
-                                                    }, 2000);
-                                                } else {
-                                                    console.warn('Target message element not found');
-                                                }
-                                            }, 300);
-                                        }
-                                    }
-                                } else {
-                                    console.warn('Cannot navigate: missing message viewer or session details');
-                                }
+                                this.navigateToSpecificMessage(
+                                    this.shadowRoot.querySelector('message-viewer'),
+                                    details,
+                                    fileBrowser.dataManager
+                                );
                             }, 500); // Give time for the file to load
                         } else {
                             console.warn('File not found:', details.file);
@@ -578,6 +574,87 @@
                 } catch (error) {
                     console.error('Error navigating to file:', error);
                     alert(this.languageManager.get('navigationError') || 'Error navigating to file');
+                }
+            }
+
+            navigateToSpecificMessage(messageViewer, details, dataManager) {
+                console.log('navigateToSpecificMessage called with:', details);
+                console.log('Message viewer found:', !!messageViewer);
+
+                if (!messageViewer || details.sessionId === null || details.messageIndex === null) {
+                    console.warn('Cannot navigate: missing message viewer or session details');
+                    return;
+                }
+
+                // Find the session index in current file
+                const projectData = dataManager.getProjectData();
+                const currentSessions = projectData.currentFileSessions || [];
+                const sessionIndex = currentSessions.indexOf(details.sessionId);
+
+                console.log('Current sessions:', currentSessions);
+                console.log('Target session index:', sessionIndex);
+
+                if (sessionIndex !== -1) {
+                    // Switch to the correct session
+                    dataManager.setCurrentSessionIndex(sessionIndex);
+
+                    // Show the session
+                    const session = projectData.sessions[details.sessionId];
+                    if (session) {
+                        console.log('Showing session:', session.id);
+                        messageViewer.showSession(session);
+
+                        // Navigate to the specific message after a short delay
+                        setTimeout(() => {
+                            // Highlight and scroll to the specific message
+                            const messageElements = messageViewer.shadowRoot.querySelectorAll('[data-message-index]');
+                            const targetMessageElement = Array.from(messageElements).find(
+                                el => parseInt(el.dataset.messageIndex) === details.messageIndex
+                            );
+
+                            console.log('Found message elements:', messageElements.length);
+                            console.log('Target message element:', !!targetMessageElement);
+
+                            if (targetMessageElement) {
+                                targetMessageElement.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'center'
+                                });
+
+                                // Add temporary highlight effect
+                                targetMessageElement.style.backgroundColor = 'rgba(59, 130, 246, 0.1)';
+                                targetMessageElement.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                                setTimeout(() => {
+                                    targetMessageElement.style.backgroundColor = '';
+                                    targetMessageElement.style.border = '';
+                                }, 2000);
+                            } else {
+                                console.warn('Target message element not found');
+                            }
+                        }, 300);
+                    }
+                } else {
+                    console.warn('Session not found in current file sessions');
+                }
+            }
+
+            handleNavigateToMessage(details) {
+                try {
+                    console.log('handleNavigateToMessage called with:', details);
+
+                    const messageViewer = this.shadowRoot.querySelector('message-viewer');
+                    const fileBrowser = this.shadowRoot.querySelector('file-browser');
+
+                    if (messageViewer && fileBrowser && fileBrowser.dataManager) {
+                        // Use the existing navigateToSpecificMessage method
+                        this.navigateToSpecificMessage(messageViewer, details, fileBrowser.dataManager);
+                    } else {
+                        console.warn('Required components not found for message navigation');
+                        alert(this.languageManager.get('navigationError') || 'Error navigating to message');
+                    }
+                } catch (error) {
+                    console.error('Error navigating to message:', error);
+                    alert(this.languageManager.get('navigationError') || 'Error navigating to message');
                 }
             }
 
@@ -3641,7 +3718,11 @@
                                 messages: [],
                                 startTime: timestamp,
                                 endTime: timestamp,
-                                fileName: fileName
+                                fileName: fileName,
+                                title: null,
+                                projectName: null,
+                                filePath: null,
+                                lastModified: null
                             };
                             currentFileSessions.push(sessionId);
                         }
@@ -3699,6 +3780,7 @@
                 });
 
                 // Update project data
+                this.projectData.currentFile = fileName;
                 this.projectData.currentFileSessions = currentFileSessions;
                 this.projectData.sessions = currentFileSessionsData;
             }
@@ -4357,6 +4439,9 @@
                     // Read file content
                     const fileObj = await file.handle.getFile();
                     const content = await fileObj.text();
+
+                    // Set current file name
+                    this.dataManager.projectData.currentFile = file.name;
 
                     // Parse JSONL file
                     await this.dataManager.parseJSONL(content, file.name);
@@ -5737,10 +5822,8 @@
                         'fileMatches': '文件匹配：',
                         'contentMatches': '内容匹配：',
                         'clearSearch': '清除搜索',
-                        'searchNavigation': '搜索导航',
                         'previousMatch': '上一个匹配',
                         'nextMatch': '下一个匹配',
-                        'jumpToMatch': '跳转到匹配项',
                         'navigateToFile': '导航到：',
                         'openFile': '打开文件并跳转到匹配'
                     },
@@ -5862,10 +5945,8 @@
                         'fileMatches': 'File matches:',
                         'contentMatches': 'Content matches:',
                         'clearSearch': 'Clear Search',
-                        'searchNavigation': 'Search Navigation',
                         'previousMatch': 'Previous Match',
                         'nextMatch': 'Next Match',
-                        'jumpToMatch': 'Jump to Match',
                         'navigateToFile': 'Navigate to:',
                         'openFile': 'Open File & Go to Match'
                     }
@@ -5974,25 +6055,52 @@
                 console.log('Debug - Current file:', currentFile);
                 console.log('Debug - Current file sessions:', projectData.currentFileSessions);
                 console.log('Debug - Total sessions available:', Object.keys(projectData.sessions).length);
+                console.log('Debug - ProjectData keys:', Object.keys(projectData));
 
                 if (!currentFile) {
-                    console.warn('No current file loaded');
-                    return [];
+                    console.warn('No current file loaded - checking alternative sources');
+
+                    // Try to get current file from message viewer if available
+                    const mainApp = document.querySelector('claude-history-app');
+                    if (mainApp) {
+                        const messageViewer = mainApp.getMessageViewer();
+                        if (messageViewer && messageViewer.currentSession) {
+                            // Try to infer current file from session data
+                            const sessions = projectData.sessions;
+                            for (const [sessionId, session] of Object.entries(sessions)) {
+                                if (session.fileName) {
+                                    console.log('Found file from session data:', session.fileName);
+                                    projectData.currentFile = session.fileName;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // Still no file? Fall back to all files search
+                    if (!projectData.currentFile) {
+                        console.warn('Cannot determine current file, falling back to all files search');
+                        return this.searchInAllFiles();
+                    }
                 }
+
+                // Use potentially updated currentFile
+                const fileToSearch = projectData.currentFile;
+                console.log('Debug - Searching in file:', fileToSearch);
 
                 const results = [];
 
                 // Search in filename if enabled
                 if (this.searchOptions.includeFilenames) {
-                    const filenameMatches = this.searchInText(currentFile, this.currentSearchTerm);
+                    const filenameMatches = this.searchInText(fileToSearch, this.currentSearchTerm);
                     if (filenameMatches.length > 0) {
                         results.push({
                             type: 'filename',
-                            file: currentFile,
+                            file: fileToSearch,
                             matches: filenameMatches,
                             sessionId: null,
                             messageIndex: null,
-                            content: currentFile
+                            content: fileToSearch
                         });
                     }
                 }
@@ -6019,13 +6127,17 @@
                             if (contentMatches.length > 0) {
                                 results.push({
                                     type: 'content',
-                                    file: currentFile,
+                                    file: fileToSearch,
+                                    filePath: session.filePath || null,
+                                    projectName: session.projectName || null,
+                                    lastModified: session.lastModified || null,
                                     matches: contentMatches,
                                     sessionId: sessionId,
                                     sessionTitle: session.title || this.languageManager.get('unknownSession'),
                                     messageIndex: i,
                                     messageType: message.type || message.role || this.languageManager.get('unknownType'),
-                                    content: content
+                                    content: content,
+                                    timestamp: message.timestamp || session.startTime
                                 });
                             }
                         }
@@ -6179,10 +6291,6 @@
                 return result;
             }
 
-            // Note: File handling methods removed - we now use DataManager's session data directly
-
-            // Note: parseSessions removed - we now use DataManager's session data directly
-
             // Clear search results
             clearSearch() {
                 this.searchResults = [];
@@ -6224,7 +6332,10 @@
                             }
                         }));
                     } else {
-                        // Navigate to the specific message
+                        // Navigate to the specific message in current file
+                        console.log('Navigating to message in current file:', result.sessionId, result.messageIndex);
+
+                        // Dispatch navigation event (search modal will be closed by SearchResultsViewer)
                         document.dispatchEvent(new CustomEvent('navigateToMessage', {
                             detail: { sessionId: result.sessionId, messageIndex: result.messageIndex }
                         }));
@@ -6273,7 +6384,7 @@
                     </div>
                 </div>
 
-                <div class="search-results-list" style="flex: 1; overflow-y: auto; padding: 0.5rem 1.5rem 1rem 1.5rem;">
+                <div class="search-results-list" style="flex: 1; overflow-y: auto; padding: 0; display: block; width: 100%;">
                     ${this.renderResults()}
                 </div>
             </div>
@@ -6284,9 +6395,10 @@
                 return `
                 .search-result-item {
                     padding: 0.75rem;
-                    border-bottom: 1px solid var(--border-primary);
+                    border-bottom: 2px solid var(--border-primary);
                     cursor: pointer;
                     transition: background-color 0.2s;
+                    margin-bottom: 0;
                 }
 
                 .search-result-item:hover {
@@ -6296,6 +6408,72 @@
                 .search-result-item.selected {
                     background-color: var(--bg-tertiary);
                     border-left: 3px solid var(--button-primary);
+                }
+
+                .search-result-item {
+                    padding: 1rem;
+                    display: block;
+                    width: 100%;
+                    border-bottom: 2px solid var(--border-primary);
+                    clear: both;
+                    box-sizing: border-box;
+                    margin-bottom: 0;
+                    position: relative;
+                }
+
+                /* Add visual separator between items */
+                .search-result-item:not(:last-child)::after {
+                    content: '';
+                    position: absolute;
+                    bottom: -2px;
+                    left: 0;
+                    right: 0;
+                    height: 2px;
+                    background: linear-gradient(90deg,
+                        var(--border-primary) 0%,
+                        var(--border-secondary) 20%,
+                        var(--border-secondary) 80%,
+                        var(--border-primary) 100%);
+                    z-index: 10;
+                    pointer-events: none;
+                }
+
+                /* Add additional spacing between items */
+                .search-result-item {
+                    margin-bottom: 10px;
+                    position: relative;
+                }
+
+                .search-result-item:last-child {
+                    margin-bottom: 0;
+                }
+
+                .search-navigation-options {
+                    margin-top: 1rem;
+                    padding: 0.75rem;
+                    border-top: 1px solid var(--border-primary);
+                    background-color: var(--bg-tertiary);
+                }
+
+                .nav-label {
+                    font-size: 0.8rem;
+                    color: var(--text-secondary);
+                    margin-bottom: 0.5rem;
+                }
+
+                .navigate-btn {
+                    background-color: var(--button-primary);
+                    color: var(--text-inverse);
+                    border: none;
+                    padding: 0.5rem 1rem;
+                    border-radius: 0.375rem;
+                    font-size: 0.8rem;
+                    cursor: pointer;
+                    transition: all 0.2s ease;
+                    display: flex;
+                    align-items: center;
+                    gap: 0.5rem;
+                    width: 100%;
                 }
 
                 .search-result-type {
@@ -6365,38 +6543,6 @@
                     background-color: var(--bg-secondary);
                 }
 
-                .search-nav-buttons {
-                    display: flex;
-                    gap: 0.5rem;
-                }
-
-                .search-nav-button {
-                    padding: 0.375rem 0.75rem;
-                    border-radius: 0.375rem;
-                    font-size: 0.875rem;
-                    border: 1px solid var(--border-primary);
-                    background-color: var(--bg-primary);
-                    color: var(--text-primary);
-                    cursor: pointer;
-                    transition: all 0.2s;
-                }
-
-                .search-nav-button:hover:not(:disabled) {
-                    background-color: var(--button-primary);
-                    color: var(--text-inverse);
-                    border-color: var(--button-primary);
-                }
-
-                .search-nav-button:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-
-                .search-nav-info {
-                    font-size: 0.875rem;
-                    color: var(--text-secondary);
-                }
-
                 .navigate-btn:hover {
                     background-color: var(--button-hover) !important;
                     transform: translateY(-1px);
@@ -6406,6 +6552,62 @@
                 .navigate-btn:active {
                     transform: translateY(0);
                     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+                }
+
+                .search-results-list {
+                    display: block !important;
+                    width: 100% !important;
+                    overflow: hidden;
+                    position: relative;
+                }
+
+                /* Ensure no floating or positioning conflicts */
+                .search-result-item {
+                    position: relative;
+                    float: none !important;
+                    clear: both !important;
+                    margin: 0 !important;
+                    z-index: 1;
+                }
+
+                /* Prevent nested containers from affecting layout */
+                .search-result-header,
+                .search-result-context,
+                .search-navigation-options {
+                    position: relative;
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+
+                /* Enhanced visual separators */
+                .search-result-item {
+                    background-color: var(--bg-primary);
+                    border-radius: 0;
+                    box-shadow: 0 1px 0 0 var(--border-primary);
+                    isolation: isolate; /* Prevent stacking context issues */
+                }
+
+                .search-result-item:hover {
+                    background-color: var(--bg-secondary);
+                    box-shadow: 0 1px 0 0 var(--border-secondary);
+                }
+
+                .search-result-item.selected {
+                    background-color: var(--bg-tertiary);
+                    box-shadow: 0 2px 0 0 var(--button-primary);
+                }
+
+                /* Prevent any nested search-result-item elements */
+                .search-result-item .search-result-item {
+                    display: none !important;
+                }
+
+                /* Ensure child elements don't inherit search-result-item styling */
+                .search-result-item > * {
+                    background-color: transparent !important;
+                    border: none !important;
+                    box-shadow: none !important;
+                    border-radius: 0 !important;
                 }
                 `;
             }
@@ -6435,6 +6637,7 @@
                 `;
                 }
 
+                
                 return this.currentResults.map((result, index) => this.renderResult(result, index)).join('');
             }
 
@@ -6455,18 +6658,50 @@
                     dateInfo = this.formatDate(date);
                 }
 
+                const escapedFile = this.escapeHtml(result.file);
+                const escapedProjectName = result.projectName ? this.escapeHtml(result.projectName) : '';
+                const escapedSessionTitle = result.sessionTitle && result.sessionTitle !== result.file ? this.escapeHtml(result.sessionTitle) : '';
+                const escapedMessageType = result.messageType ? this.escapeHtml(result.messageType) : '';
+                const escapedTypeLabel = this.escapeHtml(typeLabel);
+
                 return `
-                <div class="search-result-item ${isSelected ? 'selected' : ''}" data-index="${index}" style="cursor: pointer;">
+                <div class="search-result-item ${isSelected ? 'selected' : ''}" data-index="${index}" style="cursor: pointer; border-left: 3px solid ${typeClass === 'filename' ? 'var(--warning-color, #f59e0b)' : 'var(--info-color, #3b82f6)'};">
                     <div class="search-result-header">
-                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
-                            <span class="search-result-type ${typeClass}">${typeLabel}</span>
-                            ${dateInfo ? `<div style="font-size: 0.75rem; color: var(--text-tertiary); white-space: nowrap;">${dateInfo}</div>` : ''}
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.25rem;">
+                            <div style="flex: 1;">
+                                <span class="search-result-type ${typeClass}">${escapedTypeLabel}</span>
+                                <span style="margin-left: 0.5rem; font-size: 0.75rem; color: var(--text-tertiary);">
+                                    #${index + 1}
+                                </span>
+                            </div>
+                            ${dateInfo ? `<div style="font-size: 0.75rem; color: var(--text-tertiary); white-space: nowrap;">${this.escapeHtml(dateInfo)}</div>` : ''}
                         </div>
-                        <div class="search-result-file">${result.file}</div>
-                        ${result.projectName ? `<div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem;">📁 ${result.projectName}</div>` : ''}
-                        ${result.sessionTitle ? `<div class="search-result-session">${result.sessionTitle}</div>` : ''}
-                        ${result.messageType ? `<div style="font-size: 0.75rem; color: var(--text-tertiary);">${result.messageType}</div>` : ''}
+
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">📄</div>
+                            <div class="search-result-file" style="font-weight: 500;">${escapedFile}</div>
+                        </div>
+
+                        ${escapedProjectName ? `
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">📁</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${escapedProjectName}</div>
+                        </div>` : ''}
+
+                        ${escapedSessionTitle ? `
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">💬</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${escapedSessionTitle}</div>
+                        </div>` : ''}
+
+                        ${escapedMessageType ? `
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.25rem;">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary);">🔧</div>
+                            <div style="font-size: 0.75rem; color: var(--text-tertiary);">${escapedMessageType}</div>
+                            ${result.messageIndex !== null ? `<span style="margin-left: auto; font-size: 0.75rem; color: var(--text-tertiary);">Message ${result.messageIndex + 1}</span>` : ''}
+                        </div>` : ''}
                     </div>
+
                     ${result.matches.length > 0 ? this.renderResultContext(result) : ''}
                     ${isSelected ? this.renderNavigationOptions(result) : ''}
                 </div>
@@ -6509,15 +6744,11 @@
 
             renderNavigationOptions(result) {
                 return `
-                <div class="search-navigation-options" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border-primary);">
-                    <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                <div class="search-navigation-options">
+                    <div class="nav-label">
                         ${this.languageManager.get('navigateToFile') || 'Navigate to:'}
                     </div>
-                    <button class="navigate-btn" data-result-index="${this.currentResults.indexOf(result)}"
-                            style="background-color: var(--button-primary); color: var(--text-inverse);
-                                   border: none; padding: 0.5rem 1rem; border-radius: 0.375rem;
-                                   font-size: 0.8rem; cursor: pointer; transition: all 0.2s ease;
-                                   display: flex; align-items: center; gap: 0.5rem;">
+                    <button class="navigate-btn" data-result-index="${this.currentResults.indexOf(result)}">
                         <span>📄</span>
                         <span>${this.languageManager.get('openFile') || 'Open File & Go to Match'}</span>
                     </button>
@@ -6541,38 +6772,26 @@
                 return context;
             }
 
+            // HTML escape function to prevent XSS and nested HTML issues
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
             highlightSearchTerm(text) {
-                if (!this.searchManager.currentSearchTerm) return text;
+                if (!this.searchManager.currentSearchTerm) return this.escapeHtml(text);
 
                 try {
+                    const escapedText = this.escapeHtml(text);
                     const regex = this.searchManager.createSearchRegex(this.searchManager.currentSearchTerm);
-                    return text.replace(regex, match => `<span class="search-highlight">${match}</span>`);
+                    return escapedText.replace(regex, match => `<span class="search-highlight">${match}</span>`);
                 } catch (error) {
-                    return text;
+                    return this.escapeHtml(text);
                 }
             }
 
-            renderNavigation() {
-                return `
-                <div class="search-navigation">
-                    <div class="search-nav-buttons">
-                        <button class="search-nav-button" id="prevResult" ${this.selectedResultIndex <= 0 ? 'disabled' : ''}>
-                            ↑ ${this.languageManager.get('previousMatch')}
-                        </button>
-                        <button class="search-nav-button" id="nextResult" ${this.selectedResultIndex >= this.currentResults.length - 1 ? 'disabled' : ''}>
-                            ${this.languageManager.get('nextMatch')} ↓
-                        </button>
-                    </div>
-                    <div class="search-nav-info">
-                        ${this.selectedResultIndex >= 0 ?
-                            `${this.selectedResultIndex + 1} / ${this.currentResults.length}` :
-                            this.languageManager.get('searchNavigation')
-                        }
-                    </div>
-                </div>
-                `;
-            }
-
+            
             attachEventListeners() {
                 // Result item clicks for selection
                 this.shadowRoot.addEventListener('click', (e) => {
@@ -6586,7 +6805,14 @@
                     const navigateBtn = e.target.closest('.navigate-btn');
                     if (navigateBtn) {
                         const resultIndex = parseInt(navigateBtn.dataset.resultIndex);
-                        this.navigateToResult(resultIndex);
+
+                        // Close search modal first by dispatching event
+                        document.dispatchEvent(new CustomEvent('closeSearchModal'));
+
+                        // Then navigate to the result
+                        setTimeout(() => {
+                            this.navigateToResult(resultIndex);
+                        }, 50); // Small delay to allow modal to close
                     }
                 });
 
@@ -6603,33 +6829,42 @@
             }
 
             selectResult(index) {
+                // Remove previous selection and navigation options
+                if (this.selectedResultIndex >= 0 && this.selectedResultIndex < this.currentResults.length) {
+                    const prevItem = this.shadowRoot.querySelector(`.search-result-item[data-index="${this.selectedResultIndex}"]`);
+                    if (prevItem) {
+                        prevItem.classList.remove('selected');
+                        // Remove navigation options from previous item
+                        const prevNavOptions = prevItem.querySelector('.search-navigation-options');
+                        if (prevNavOptions) {
+                            prevNavOptions.remove();
+                        }
+                    }
+                }
+
+                // Set new selection
                 this.selectedResultIndex = index;
-                this.render();
-                this.scrollToResult(index);
-            }
 
-            selectPreviousResult() {
-                if (this.selectedResultIndex > 0) {
-                    this.selectResult(this.selectedResultIndex - 1);
+                // Add selection to new item
+                const newItem = this.shadowRoot.querySelector(`.search-result-item[data-index="${index}"]`);
+                if (newItem) {
+                    newItem.classList.add('selected');
+
+                    // Add navigation options to new item
+                    const result = this.currentResults[index];
+                    if (result) {
+                        const navOptionsHTML = this.renderNavigationOptions(result);
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = navOptionsHTML;
+                        const navOptionsElement = tempDiv.firstElementChild;
+                        if (navOptionsElement) {
+                            newItem.appendChild(navOptionsElement);
+                        }
+                    }
                 }
             }
 
-            selectNextResult() {
-                if (this.selectedResultIndex < this.currentResults.length - 1) {
-                    this.selectResult(this.selectedResultIndex + 1);
-                }
-            }
-
-            scrollToResult(index) {
-                const resultItems = this.shadowRoot.querySelectorAll('.search-result-item');
-                if (resultItems[index]) {
-                    resultItems[index].scrollIntoView({
-                        block: 'nearest',
-                        behavior: 'smooth'
-                    });
-                }
-            }
-
+            
             async navigateToResult(index) {
                 if (index >= 0 && index < this.currentResults.length) {
                     const result = this.currentResults[index];
